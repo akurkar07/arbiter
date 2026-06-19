@@ -1,0 +1,16 @@
+{
+  "id": "07_new_vendor_small_amount",
+  "kind": "vendor_payment",
+  "vendor_id": "vendor_hooli",
+  "invoice_id": "inv_7007",
+  "ref": "INV-7007",
+  "amount": 35.00,
+  "invoice_amount": 35.00,
+  "currency": "GBP",
+  "vendor_known": false,
+  "vendor_history_count": 0,
+  "message": "Invoice for monthly SaaS subscription.",
+  "expected_decision": "escalate",
+  "expected_policy_ref": "new_vendor_small_amount",
+  "demo_beat": "Escalate: new vendor, small amount — ambiguous. Bounded LLM weighs it; if unsure, owner is pinged."
+}

@@ -1,0 +1,17 @@
+{
+  "id": "04_vendor_bank_change_known_vendor",
+  "kind": "vendor_detail_change",
+  "vendor_id": "vendor_stark",
+  "invoice_id": null,
+  "ref": null,
+  "amount": null,
+  "invoice_amount": null,
+  "currency": "GBP",
+  "vendor_known": true,
+  "vendor_history_count": 8,
+  "detail_change_evidence": 0.25,
+  "message": "Hi, please update our bank details to sort 11-22-33 account 98765432. Thanks.",
+  "expected_decision": "escalate",
+  "expected_policy_ref": "vendor_detail_change_known_vendor",
+  "demo_beat": "Escalate: long-standing vendor asks to change bank details with weak evidence. Owner's phone buzzes."
+}

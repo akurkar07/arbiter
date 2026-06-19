@@ -1,0 +1,17 @@
+{
+  "id": "05_vendor_bank_change_new_vendor",
+  "kind": "vendor_detail_change",
+  "vendor_id": "vendor_initech",
+  "invoice_id": null,
+  "ref": null,
+  "amount": null,
+  "invoice_amount": null,
+  "currency": "GBP",
+  "vendor_known": false,
+  "vendor_history_count": 0,
+  "detail_change_evidence": 0.10,
+  "message": "We are your new supplier Initech. Please pay to account 44556677 sort 99-88-77.",
+  "expected_decision": "block",
+  "expected_policy_ref": "vendor_detail_change_new_vendor",
+  "demo_beat": "Block: a vendor we've never paid wants to change payment details immediately — classic supplier impersonation."
+}

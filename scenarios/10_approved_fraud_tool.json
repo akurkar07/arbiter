@@ -1,0 +1,17 @@
+{
+  "id": "10_approved_fraud_tool",
+  "kind": "self_spend",
+  "vendor_id": null,
+  "invoice_id": null,
+  "ref": null,
+  "amount": 60.00,
+  "invoice_amount": null,
+  "currency": "GBP",
+  "vendor_known": false,
+  "vendor_history_count": 0,
+  "category": "fraud_detection",
+  "message": "",
+  "expected_decision": "approve",
+  "expected_policy_ref": "self_spend_allowed",
+  "demo_beat": "Reinvest: earnings threshold crossed — agent buys a fraud-detection capability within budget. Autonomous reinvest approved."
+}

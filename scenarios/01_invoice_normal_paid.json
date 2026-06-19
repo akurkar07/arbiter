@@ -1,0 +1,16 @@
+{
+  "id": "01_invoice_normal_paid",
+  "kind": "invoice_payment",
+  "vendor_id": "cust_northstar",
+  "invoice_id": "inv_1001",
+  "ref": "INV-1001",
+  "amount": 480.00,
+  "invoice_amount": 480.00,
+  "currency": "GBP",
+  "vendor_known": true,
+  "vendor_history_count": 6,
+  "message": "",
+  "expected_decision": "approve",
+  "expected_policy_ref": "invoice_normal_paid",
+  "demo_beat": "Earn: Northstar Studio pays a normal £480 invoice. Reconciled, no red flags."
+}

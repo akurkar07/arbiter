@@ -1,0 +1,16 @@
+{
+  "id": "03_amount_mismatch",
+  "kind": "vendor_payment",
+  "vendor_id": "vendor_globex",
+  "invoice_id": "inv_3003",
+  "ref": "INV-3003",
+  "amount": 840.00,
+  "invoice_amount": 480.00,
+  "currency": "GBP",
+  "vendor_known": true,
+  "vendor_history_count": 2,
+  "message": "",
+  "expected_decision": "block",
+  "expected_policy_ref": "amount_mismatch",
+  "demo_beat": "Block: invoice says £480 but the payment request is £840. Overpayment caught."
+}
