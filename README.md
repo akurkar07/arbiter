@@ -51,9 +51,8 @@ dashboard/             # Alex's lane — dashboard + phone approval UI
 
 ## Team lanes
 
-- **Helios** — policy engine, agent core, ledger, reinvest, tests, demo runner.
+- **Ben** — policy engine, agent core, ledger, reinvest, tests, demo runner; orchestration, narrative, submission, repo admin.
 - **Alex** — Stripe Checkout/webhook, scenario generator, dashboard, phone UI.
-- **Ben** — orchestrate, narrative, submission, keys + repo admin.
 
 ## No real money
 

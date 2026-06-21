@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>LedgerGuard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;500;600&family=Source+Code+Pro:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  /* Stripe-native design language adapted into a fintech ops dashboard.
+     Two-axis visual system:
+       - decision color (green/red/amber) says WHAT the agent decided
+       - Stripe purple marks SELF-GOVERNANCE — the differentiator, never red,
+         because the agent refusing its own bad spend is a trust signal, not an error.
+     White canvas, deep-navy ink, weight-300 display numerals, mono for tabular
+     money so decimals align, blue-tinted elevation. */
+  :root {
+    --bg: #ffffff;
+    --canvas: #f6f9fc;
+    --ink: #061b31;
+    --label: #273951;
+    --body: #64748d;
+    --faint: #aab4c2;
+    --border: #e5edf5;
+    --border-strong: #d6dee8;
+    --purple: #533afd;
+    --purple-hover: #4434d4;
+    --purple-ink: #3826c4;
+    --purple-wash: #f3f1ff;
+    --purple-edge: #ddd6ff;
+    --green: #15be53;
+    --green-ink: #0a7d36;
+    --green-wash: #e8f8ef;
+    --green-edge: #c4ead2;
+    --red: #df1b41;
+    --red-ink: #b3093c;
+    --red-wash: #fdeef1;
+    --red-edge: #f3cdd6;
+    --amber: #e0a32e;
+    --amber-ink: #8f6100;
+    --amber-wash: #fdf4e3;
+    --amber-edge: #f1ddb4;
+    --shadow-amb: rgba(23,23,23,0.05) 0px 2px 5px -1px, rgba(23,23,23,0.03) 0px 1px 3px -1px;
+    --shadow-lift: rgba(50,50,93,0.16) 0px 13px 27px -10px, rgba(0,0,0,0.08) 0px 8px 16px -10px;
+    --mono: 'Source Code Pro', ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: 'Source Sans 3', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    font-feature-settings: "ss01";
+    -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+  }
+  .tnum { font-variant-numeric: tabular-nums; font-feature-settings: "ss01", "tnum"; }
+
+  header {
+    height: 64px; padding: 0 28px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    background: rgba(255,255,255,0.86); backdrop-filter: blur(10px);
+    position: sticky; top: 0; z-index: 10;
+  }
+  .brand { display: flex; align-items: center; gap: 13px; }
+  .brand .logo {
+    width: 26px; height: 26px; border-radius: 7px; flex: none;
+    background: linear-gradient(150deg, #6b54ff, var(--purple));
+    box-shadow: rgba(50,50,93,0.22) 0px 4px 9px -3px;
+    position: relative;
+  }
+  .brand .logo::after {
+    content: ""; position: absolute; inset: 0; margin: auto;
+    width: 9px; height: 9px; border: 2px solid #fff; border-radius: 50%;
+    border-right-color: transparent; transform: rotate(-20deg);
+  }
+  .brand .mark { font-size: 18px; font-weight: 600; letter-spacing: -0.4px; color: var(--ink); }
+  .brand .div { width: 1px; height: 18px; background: var(--border-strong); }
+  .brand .tag { font-size: 13px; color: var(--body); font-weight: 300; }
+  .controls { display: flex; gap: 10px; }
+  button {
+    font-family: inherit; font-feature-settings: "ss01"; font-size: 14px; font-weight: 400;
+    cursor: pointer; padding: 8px 15px; border-radius: 6px; border: 1px solid transparent;
+    transition: background .15s, box-shadow .15s, border-color .15s;
+  }
+  .btn-primary { background: var(--purple); color: #fff; box-shadow: rgba(50,50,93,0.20) 0px 2px 5px -1px; }
+  .btn-primary:hover { background: var(--purple-hover); }
+  .btn-ghost { background: #fff; color: var(--label); border-color: var(--border-strong); }
+  .btn-ghost:hover { border-color: var(--body); }
+  button:disabled { opacity: .45; cursor: default; }
+
+  .grid { display: grid; grid-template-columns: 300px 1fr; min-height: calc(100vh - 64px); }
+  aside { background: var(--canvas); border-right: 1px solid var(--border); padding: 8px 24px 26px; }
+  main { padding: 26px 32px; max-width: 1100px; }
+
+  .metric { padding: 18px 0 16px; border-bottom: 1px solid var(--border); }
+  .metric .k {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.7px; text-transform: uppercase; color: var(--body);
+    display: flex; align-items: center; gap: 7px;
+  }
+  .metric .v { font-size: 33px; font-weight: 300; letter-spacing: -0.9px; color: var(--ink); margin-top: 5px; line-height: 1.04; }
+  .metric .v small { font-size: 18px; color: var(--body); font-weight: 300; }
+  .metric .sub { font-size: 12.5px; color: var(--body); font-weight: 300; margin-top: 4px; }
+  .track { height: 5px; background: #e3ebf4; border-radius: 3px; margin-top: 11px; overflow: hidden; }
+  .track > i { display: block; height: 100%; width: 0; background: var(--purple); border-radius: 3px; transition: width .55s cubic-bezier(.2,.7,.2,1); }
+
+  /* the moat metric: marked by purple (intelligence), not red (error) */
+  .metric.moat .k { color: var(--purple-ink); }
+  .metric.moat .k .pip { width: 7px; height: 7px; border-radius: 50%; background: var(--purple); box-shadow: 0 0 0 3px var(--purple-wash); }
+  .metric.moat .v { color: var(--purple-ink); font-weight: 400; }
+  .metric.moat .sub { color: #7a72b8; }
+
+  .pending-wrap:not(:empty) { margin-bottom: 22px; }
+  .pending {
+    border: 1px solid var(--amber-edge); border-radius: 12px; padding: 18px 20px;
+    background: linear-gradient(180deg, var(--amber-wash), #fff); box-shadow: var(--shadow-lift);
+  }
+  .pending .head { display: flex; align-items: center; gap: 9px; }
+  .pending .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 0 4px rgba(224,163,46,0.16); }
+  .pending .ttl { font-size: 12px; font-weight: 600; letter-spacing: .6px; text-transform: uppercase; color: var(--amber-ink); }
+  .pending h3 { margin: 11px 0 5px; font-size: 19px; font-weight: 400; letter-spacing: -0.3px; color: var(--ink); }
+  .pending p { margin: 0; font-size: 14px; font-weight: 300; line-height: 1.55; color: var(--body); }
+  .pending .meta { margin-top: 9px; font-family: var(--mono); font-size: 12px; color: var(--label); }
+  .pending .row { display: flex; gap: 10px; margin-top: 16px; }
+  .pending .deny { background: #fff; color: var(--red-ink); border-color: var(--red-edge); }
+  .pending .deny:hover { border-color: var(--red); }
+
+  .ledger { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow-amb); background: #fff; }
+  .lhead {
+    display: grid; grid-template-columns: 1fr 120px 96px 120px; gap: 16px;
+    padding: 12px 22px; background: var(--canvas); border-bottom: 1px solid var(--border);
+    font-size: 11px; font-weight: 600; letter-spacing: .7px; text-transform: uppercase; color: var(--body);
+  }
+  .lhead .r { text-align: right; }
+  .empty { padding: 58px 20px; text-align: center; color: var(--body); font-weight: 300; font-size: 15px; }
+  .lrow {
+    display: grid; grid-template-columns: 1fr 120px 96px 120px; gap: 16px;
+    padding: 17px 22px; align-items: center; border-bottom: 1px solid var(--border);
+    animation: fade .35s ease;
+  }
+  .lrow:last-child { border-bottom: 0; }
+  @keyframes fade { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+  .ev { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+  .ev .sd { width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; flex: none; }
+  .ev .sd.approve { background: var(--green); }
+  .ev .sd.block { background: var(--red); }
+  .ev .sd.escalate { background: var(--amber); }
+  .ev .txt { min-width: 0; }
+  .ev .beat { font-size: 14.5px; font-weight: 400; color: var(--ink); line-height: 1.45; }
+  .ev .reason { font-size: 12.5px; font-weight: 300; color: var(--body); margin-top: 3px; line-height: 1.55; }
+  .gov-tag {
+    display: inline-flex; align-items: center; gap: 5px; margin-top: 8px;
+    font-size: 10px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; color: var(--purple-ink);
+    background: var(--purple-wash); border: 1px solid var(--purple-edge); padding: 3px 8px 3px 6px; border-radius: 5px;
+  }
+  .gov-tag::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--purple); }
+  .badge {
+    justify-self: start; font-size: 11.5px; font-weight: 500; letter-spacing: .1px;
+    padding: 2px 9px; border-radius: 4px; border: 1px solid transparent;
+  }
+  .badge.approve { background: var(--green-wash); color: var(--green-ink); border-color: var(--green-edge); }
+  .badge.block { background: var(--red-wash); color: var(--red-ink); border-color: var(--red-edge); }
+  .badge.escalate { background: var(--amber-wash); color: var(--amber-ink); border-color: var(--amber-edge); }
+  .layer { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--body); letter-spacing: -0.2px; }
+  .amt { text-align: right; font-family: var(--mono); font-size: 13.5px; font-weight: 500; color: var(--ink); letter-spacing: -0.3px; }
+  .amt.zero { color: var(--faint); font-weight: 400; }
+
+  /* self-governance rows grouped by a faint PURPLE wash (the differentiator),
+     while the decision itself keeps its red "Blocked" badge. */
+  .lrow.selfgov { background: linear-gradient(90deg, var(--purple-wash), #fff 78%); }
+  .lrow.selfgov .ev .beat { font-weight: 500; }
+  /* self-governance owns the row signal end-to-end: the status dot goes purple
+     (intelligence), even though the Decision badge keeps its literal colour. */
+  .lrow.selfgov .ev .sd { background: var(--purple); }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <span class="logo"></span>
+    <span class="mark">LedgerGuard</span>
+    <span class="div"></span>
+    <span class="tag">The accountant that doesn't trust itself with your money</span>
+  </div>
+  <div class="controls">
+    <button class="btn-ghost" id="reset">Reset</button>
+    <button class="btn-primary" id="run">Run demo</button>
+  </div>
+</header>
+
+<div class="grid">
+  <aside>
+    <div class="metric">
+      <div class="k">Earned</div>
+      <div class="v tnum" id="earnings"><small>&pound;</small>0.00</div>
+      <div class="sub">via Stripe &middot; test mode</div>
+    </div>
+    <div class="metric">
+      <div class="k">Net position</div>
+      <div class="v tnum" id="net"><small>&pound;</small>0.00</div>
+      <div class="sub" id="spendsub">&pound;0.00 reinvested</div>
+    </div>
+    <div class="metric">
+      <div class="k">Fraud catch-rate</div>
+      <div class="v tnum" id="catch">0<small>%</small></div>
+      <div class="track"><i id="catchbar"></i></div>
+    </div>
+    <div class="metric moat">
+      <div class="k"><span class="pip"></span>Self-blocks</div>
+      <div class="v tnum" id="selfblocks">0</div>
+      <div class="sub">off-goal spends it refused on itself</div>
+    </div>
+  </aside>
+
+  <main>
+    <div class="pending-wrap" id="pending"></div>
+    <div class="ledger">
+      <div class="lhead">
+        <span>Event</span><span>Decision</span><span>Layer</span><span class="r">Amount</span>
+      </div>
+      <div id="feed"><div class="empty">Press <b>Run demo</b> to play the ledger.</div></div>
+    </div>
+  </main>
+</div>
+
+<script>
+const money = n => "\u00A3" + Number(n || 0).toFixed(2);
+const DLABEL = { approve: "Approved", block: "Blocked", escalate: "Escalated" };
+const LLABEL = { rules: "Rules", llm: "LLM", escalate: "Escalate" };
+
+function isSelfGov(r) { return r.kind === "self_spend"; }
+
+function render(s) {
+  document.getElementById("earnings").innerHTML = "<small>\u00A3</small>" + Number(s.earnings||0).toFixed(2);
+  const net = Number(s.net||0);
+  document.getElementById("net").innerHTML = (net<0?"-":"") + "<small>\u00A3</small>" + Math.abs(net).toFixed(2);
+  document.getElementById("spendsub").textContent = money(s.spend) + " reinvested";
+  const pct = Math.round((s.catch_rate||0)*100);
+  document.getElementById("catch").innerHTML = pct + "<small>%</small>";
+  document.getElementById("catchbar").style.width = pct + "%";
+  document.getElementById("selfblocks").textContent =
+    (s.timeline||[]).filter(r => r.kind==="self_spend" && r.decision==="block").length;
+
+  const p = document.getElementById("pending");
+  const a = s.awaiting_approval;
+  p.innerHTML = a ? `
+    <div class="pending">
+      <div class="head"><span class="dot"></span><span class="ttl">Owner approval needed</span></div>
+      <h3>${a.beat || a.event_id}</h3>
+      <p>${a.reason || ""}</p>
+      <div class="meta">risk ${a.risk ?? "?"}${a.amount!=null ? "  \u00B7  "+money(a.amount)+" "+(a.currency||"") : ""}</div>
+      <div class="row">
+        <button class="btn-primary" onclick="act('${a.approve_url}')">Approve</button>
+        <button class="btn-ghost deny" onclick="act('${a.deny_url}')">Deny</button>
+      </div>
+    </div>` : "";
+
+  const feed = document.getElementById("feed");
+  const rows = s.timeline || [];
+  if (!rows.length) { feed.innerHTML = `<div class="empty">Press <b>Run demo</b> to play the ledger.</div>`; return; }
+  feed.innerHTML = rows.map(r => {
+    const self = isSelfGov(r);
+    const amt = r.amount!=null ? money(r.amount) : "&mdash;";
+    const gov = self ? `<span class="gov-tag">Self-governance</span>` : "";
+    return `
+      <div class="lrow ${self ? "selfgov" : ""}">
+        <div class="ev">
+          <span class="sd ${r.decision}"></span>
+          <span class="txt">
+            <span class="beat">${r.beat || r.id}</span>
+            <span class="reason">${r.reason || ""}</span>
+            ${gov}
+          </span>
+        </div>
+        <span class="badge ${r.decision}">${DLABEL[r.decision]||r.decision}</span>
+        <span class="layer">${LLABEL[r.layer]||r.layer||""}</span>
+        <span class="amt tnum ${r.amount==null?"zero":""}">${amt}</span>
+      </div>`;
+  }).join("");
+}
+
+async function poll() { try { render(await (await fetch("/state")).json()); } catch (e) {} }
+async function act(url) { await fetch(url, { method: "POST" }); poll(); }
+document.getElementById("run").onclick   = async () => { await fetch("/run",   { method: "POST" }); };
+document.getElementById("reset").onclick = async () => { await fetch("/reset", { method: "POST" }); poll(); };
+setInterval(poll, 1000);
+poll();
+</script>
+</body>
+</html>

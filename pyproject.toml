@@ -9,7 +9,7 @@ description = "Self-governing AI accountant / payment-ops agent. The Stripe acco
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
-authors = [{ name = "Ben + Alex + Helios" }]
+authors = [{ name = "Ben + Alex" }]
 dependencies = []
 
 [project.optional-dependencies]

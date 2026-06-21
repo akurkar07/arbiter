@@ -1,12 +1,12 @@
 # Alex — Handoff & Your Interface
 
-**Repo:** `/root/helios-workspace/ledgerguard/` (local; Ben will push to GitHub and add you)
+**Repo:** this repository (Ben pushes to GitHub and adds you as collaborator)
 **Hackathon:** Nous × NVIDIA × Stripe — deadline EOD June 30, 2026
-**Team:** Ben (orchestrate + present) · Alex (Stripe + dashboard + phone UI) · Helios (agent core + governance)
+**Team:** Ben (agent core + governance, orchestrate, present) · Alex (Stripe + dashboard + phone UI)
 
 ---
 
-## What's already built (Helios's lane — DONE)
+## What's already built (core — DONE)
 
 The entire governance core + agent loop + demo runner is built, tested, and committed:
 
@@ -35,7 +35,7 @@ demo CLI: full timeline plays — earn, 4 blocks, 2 escalates, 2 self-blocks, re
 
 Run it yourself:
 ```bash
-cd /root/helios-workspace/ledgerguard
+cd ledgerguard
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 pytest                    # 13 passed
@@ -117,7 +117,7 @@ edge cases, the format is:
 - `policy/rules.py` — the deterministic engine. Done, tested, it's the moat.
 - `agent/agent.py` — the 3-layer core. Done.
 - `agent/nemotron.py` — the bounded LLM layer. MockNemotron works for the demo;
-  Helios will wire the real Nemotron NIM call when the key is ready.
+  the real Nemotron NIM call gets wired in when the key is ready.
 - `ledger/event_ledger.py` — done.
 - `reinvest.py` — done.
 - `cli.py` — demo runner. Done.
@@ -140,12 +140,12 @@ result = agent.decide(event, event_id="evt_001", demo_beat="Customer paid invoic
 
 ---
 
-## Ben's blocking items (only he can do these)
+## Blocking items (repo admin)
 
-1. **Create the GitHub repo** and push `/root/helios-workspace/ledgerguard/` to it.
+1. **Create the GitHub repo** and push this repository to it. — done when you can read this on GitHub
 2. **Add Alex as collaborator** on the repo.
-3. **Share the Google Drive** folder with Alex (plans are in `/root/helios-workspace/hackathons/nous-nvidia-stripe-2026/`).
+3. **Share the Google Drive** folder with Alex (hackathon plans + v3 docs + fixtures).
 4. **Stripe test keys** — put `STRIPE_SECRET_KEY` (test mode, `sk_test_...`) and `STRIPE_WEBHOOK_SECRET` in `.env`. No real money.
 
-Once Ben does #1, Alex clones and starts on StripeGlue + dashboard. Helios wires
-the real Nemotron NIM call in parallel.
+Once the repo is up, Alex clones and starts on StripeGlue + dashboard. The real
+Nemotron NIM call gets wired in parallel.

@@ -1,0 +1,65 @@
+{
+  "earnings": 480.0,
+  "spend": 0,
+  "net": 480.0,
+  "catch_rate": 0.83,
+  "awaiting_approval": {
+    "event_id": "04_vendor_bank_change_known_vendor",
+    "beat": "Escalate: long-standing vendor asks to change bank details with weak evidence. Owner's phone buzzes.",
+    "kind": "vendor_detail_change",
+    "reason": "Long-standing vendor requests a bank-detail change with weak evidence. Not clearly safe, not clearly fraud - owner decides.",
+    "risk": 0.55,
+    "approve_url": "/approve/04_vendor_bank_change_known_vendor",
+    "deny_url": "/deny/04_vendor_bank_change_known_vendor"
+  },
+  "timeline": [
+    {
+      "t": 1781992711.1215363,
+      "id": "01_invoice_normal_paid",
+      "kind": "invoice_payment",
+      "decision": "approve",
+      "reason": "Normal invoice payment reconciled \u2014 no policy red flags.",
+      "refs": [
+        "invoice_normal_paid"
+      ],
+      "risk": 0.05,
+      "layer": "rules",
+      "amount": 480.0,
+      "currency": "GBP",
+      "category": null,
+      "beat": "Earn: Northstar Studio pays a normal \u00a3480 invoice. Reconciled, no red flags."
+    },
+    {
+      "t": 1781992711.1216471,
+      "id": "02_duplicate_invoice",
+      "kind": "vendor_payment",
+      "decision": "block",
+      "reason": "Duplicate payment fingerprint (vendor=vendor_acme, amount=320.0, ref=INV-2002) already seen.",
+      "refs": [
+        "duplicate_invoice"
+      ],
+      "risk": 0.9,
+      "layer": "rules",
+      "amount": 320.0,
+      "currency": "GBP",
+      "category": null,
+      "beat": "Block: same vendor + amount + ref already paid this cycle. Double-payment prevented."
+    },
+    {
+      "t": 1781992711.121706,
+      "id": "03_amount_mismatch",
+      "kind": "vendor_payment",
+      "decision": "block",
+      "reason": "Amount mismatch: invoice=480.0 GBP vs request=840.0 GBP.",
+      "refs": [
+        "amount_mismatch"
+      ],
+      "risk": 0.85,
+      "layer": "rules",
+      "amount": 840.0,
+      "currency": "GBP",
+      "category": null,
+      "beat": "Block: invoice says \u00a3480 but the payment request is \u00a3840. Overpayment caught."
+    }
+  ]
+}
