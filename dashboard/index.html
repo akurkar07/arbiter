@@ -43,10 +43,9 @@
     a { color: inherit; text-decoration: none; }
 
     /* ---- ambient background ---- */
-    .orb { position: fixed; border-radius: 50%; filter: blur(90px); opacity: 0.5; pointer-events: none; z-index: 0; }
-    .orb-1 { width: 620px; height: 620px; top: -240px; left: -160px; background: radial-gradient(circle, rgba(124,116,255,0.55), transparent 70%); }
-    .orb-2 { width: 520px; height: 520px; top: 10%; right: -180px; background: radial-gradient(circle, rgba(91,155,255,0.4), transparent 70%); }
-    .orb-3 { width: 560px; height: 560px; bottom: -260px; left: 30%; background: radial-gradient(circle, rgba(118,185,0,0.28), transparent 70%); }
+    .orb { position: fixed; border-radius: 50%; filter: blur(90px); opacity: 0.38; pointer-events: none; z-index: 0; }
+    .orb-1 { width: 620px; height: 620px; top: -240px; left: -160px; background: radial-gradient(circle, rgba(124,116,255,0.5), transparent 70%); }
+    .orb-2 { width: 480px; height: 480px; bottom: -220px; right: -160px; background: radial-gradient(circle, rgba(91,155,255,0.32), transparent 70%); }
     .grid-overlay {
       position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0.4;
       background-image:
@@ -64,9 +63,9 @@
       text-align: center; padding: 40px 24px 24px; gap: 22px;
       max-width: 880px; margin: 0 auto; width: 100%;
     }
-    .hero-brand { display: inline-flex; align-items: center; gap: 16px; margin-bottom: 2px; }
+    .hero-brand { display: inline-flex; align-items: center; gap: 11px; margin-bottom: 0; }
     .hero-brand .brand-mark { filter: drop-shadow(0 4px 14px rgba(124,116,255,0.5)); }
-    .hero-brand-name { margin: 0; font-size: 56px; font-weight: 800; letter-spacing: -1.2px; line-height: 1; color: var(--text); }
+    .hero-brand-name { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -0.6px; line-height: 1; color: var(--text); }
     .hero-brand-name span { color: var(--text); }
     .badge {
       display: inline-flex; align-items: center; gap: 8px;
@@ -97,6 +96,14 @@
     .step-desc { font-size: 12.5px; color: var(--muted); line-height: 1.5; margin-top: 3px; }
     .step-arrow { align-self: center; color: var(--faint); font-size: 18px; flex: 0 0 auto; }
 
+    .flow { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 4px; width: 100%; }
+    .operator { display: flex; align-items: center; gap: 14px; text-align: left; background: linear-gradient(90deg, rgba(255,126,182,0.09), rgba(255,126,182,0.02)); border: 1px solid rgba(255,126,182,0.25); border-radius: 14px; padding: 13px 18px; max-width: 540px; }
+    .op-badge { flex: 0 0 auto; font-size: 11px; font-weight: 800; letter-spacing: 0.3px; color: #ff9ec9; background: rgba(255,126,182,0.14); border: 1px solid rgba(255,126,182,0.3); border-radius: 999px; padding: 5px 11px; white-space: nowrap; }
+    .op-text { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.5; }
+    .op-text b { color: var(--text); font-weight: 700; }
+    .flow-arrow { color: var(--faint); font-size: 16px; line-height: 1; }
+    .leash-cap { font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--faint); font-weight: 700; }
+
     .cta-row { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; justify-content: center; margin-top: 10px; }
     .btn {
       display: inline-flex; align-items: center; gap: 9px;
@@ -110,6 +117,33 @@
     .btn-primary:hover .arrow { transform: translateX(4px); }
     .btn-ghost { background: transparent; color: var(--muted); border-color: var(--line); font-weight: 600; }
     .btn-ghost:hover { background: var(--surface); color: var(--text); border-color: var(--line-2); transform: translateY(-2px); }
+
+    /* ---- product preview ---- */
+    .preview { width: 100%; max-width: 560px; margin: 6px auto 0; }
+    .preview-frame { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; box-shadow: 0 30px 80px -40px rgba(0,0,0,0.9), 0 0 0 1px rgba(124,116,255,0.05); text-align: left; }
+    .preview-bar { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-bottom: 1px solid var(--line); background: rgba(255,255,255,0.02); }
+    .preview-bar .dots { display: inline-flex; gap: 6px; }
+    .preview-bar .dots i { width: 9px; height: 9px; border-radius: 50%; background: var(--line-2); display: block; }
+    .preview-title { font-family: "JetBrains Mono", monospace; font-size: 12px; color: var(--faint); }
+    .preview-live { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 10.5px; font-weight: 800; color: var(--approve); letter-spacing: 0.6px; }
+    .preview-live .lp { width: 6px; height: 6px; border-radius: 50%; background: var(--approve); box-shadow: 0 0 8px var(--approve); animation: blink 1.6s ease-in-out infinite; }
+    @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+    .preview-body { padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+    .prow { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; background: rgba(255,255,255,0.015); border: 1px solid transparent; opacity: 0; transform: translateY(8px); animation: prow-in 0.5s cubic-bezier(0.2,0.7,0.2,1) forwards; }
+    .prow .ev { font-size: 13px; font-weight: 600; color: var(--text); }
+    .prow .ev small { display: block; font-size: 11px; font-weight: 500; color: var(--faint); margin-top: 1px; }
+    .prow .by { font-size: 10.5px; color: var(--muted); font-family: "JetBrains Mono", monospace; white-space: nowrap; }
+    .pill { font-size: 10.5px; font-weight: 800; letter-spacing: 0.4px; padding: 4px 9px; border-radius: 999px; white-space: nowrap; }
+    .pill-approve { color: var(--approve); background: rgba(47,191,116,0.14); }
+    .pill-block { color: #f0566b; background: rgba(240,86,107,0.14); }
+    .pill-escalate { color: #f0a92e; background: rgba(240,169,46,0.14); }
+    .prow-1 { animation-delay: 0.55s; }
+    .prow-2 { animation-delay: 0.75s; }
+    .prow-3 { animation-delay: 0.95s; }
+    .prow-4 { animation-delay: 1.15s; }
+    @keyframes prow-in { to { opacity: 1; transform: none; } }
+    .prow-hero { border-left: 3px solid #f0566b; animation: prow-in 0.5s cubic-bezier(0.2,0.7,0.2,1) 1.15s forwards, hero-flash 1.6s ease-out 1.75s 2; }
+    @keyframes hero-flash { 0% { background: rgba(240,86,107,0.2); } 100% { background: rgba(255,255,255,0.015); } }
 
     /* ---- tech strip ---- */
     .tech {
@@ -148,12 +182,17 @@
     @keyframes rise { to { opacity: 1; transform: none; } }
     .float { animation: float 5s ease-in-out infinite; }
     @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
-    @media (prefers-reduced-motion: reduce) { .reveal, .float { animation: none; opacity: 1; transform: none; } }
+    @media (prefers-reduced-motion: reduce) { .reveal, .float, .prow, .prow-hero { animation: none; opacity: 1; transform: none; } .preview-live .lp { animation: none; } }
 
     @media (max-width: 620px) {
       .steps { flex-direction: column; align-items: stretch; }
       .step { max-width: none; }
       .step-arrow { display: none; }
+      .operator { flex-direction: column; align-items: flex-start; gap: 8px; }
+    }
+    @media (max-width: 440px) {
+      .prow .by { display: none; }
+      .prow { grid-template-columns: 1fr auto; }
     }
     @media (max-width: 560px) {
       .tech-inner { flex-direction: column; gap: 16px; }
@@ -163,7 +202,6 @@
 <body>
   <div class="orb orb-1"></div>
   <div class="orb orb-2"></div>
-  <div class="orb orb-3"></div>
   <div class="grid-overlay"></div>
 
   <!-- Shared brand gradient -->
@@ -176,7 +214,7 @@
   <!-- Hero -->
   <main class="hero">
     <a class="hero-brand reveal d1" href="dashboard.html" aria-label="Arbiter">
-      <svg class="brand-mark" viewBox="0 0 48 48" width="64" height="64" aria-hidden="true">
+      <svg class="brand-mark" viewBox="0 0 48 48" width="40" height="40" aria-hidden="true">
         <path d="M24 3l16 6v11c0 11-7 19-16 24C15 39 8 31 8 20V9l16-6z" fill="url(#lg)"/>
         <path d="M16 25l5 5 11-12" fill="none" stroke="#eef0ff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
@@ -188,33 +226,41 @@
     <h2 class="reveal d2">The agent that <span class="grad">doesn't trust itself</span> with your money.</h2>
 
     <p class="sub reveal d3">
-      Arbiter earns through Stripe, runs your payments, and blocks fraud autonomously —
-      but every time it could move money off-goal, three guardrails stand in the way before a
-      single pound leaves the account.
+      A Nous-powered operator runs your payments end-to-end — earning through Stripe, reconciling,
+      and catching fraud on its own. But every move it proposes must clear three independent
+      guardrails before a single pound leaves the account.
     </p>
 
-    <div class="steps reveal d4">
-      <div class="step step-1">
-        <span class="step-num">1</span>
-        <div class="step-body">
-          <div class="step-title">Deterministic rules</div>
-          <div class="step-desc">Hard-coded guards catch duplicates, mismatches and overrides — no LLM involved.</div>
-        </div>
+    <div class="flow reveal d4">
+      <div class="operator">
+        <span class="op-badge">Nous operator</span>
+        <p class="op-text">Reads your books and <b>proposes</b> every payment, payout and reinvestment — fully autonomously.</p>
       </div>
-      <span class="step-arrow" aria-hidden="true">→</span>
-      <div class="step step-2">
-        <span class="step-num">2</span>
-        <div class="step-body">
-          <div class="step-title">Bounded judgment</div>
-          <div class="step-desc">Nemotron weighs the gray areas the rules can't — within strict limits.</div>
+      <span class="flow-arrow" aria-hidden="true">↓</span>
+      <div class="leash-cap">Every proposal must clear three guardrails</div>
+      <div class="steps">
+        <div class="step step-1">
+          <span class="step-num">1</span>
+          <div class="step-body">
+            <div class="step-title">Deterministic rules</div>
+            <div class="step-desc">Hard-coded guards catch duplicates, mismatches and overrides — no LLM involved.</div>
+          </div>
         </div>
-      </div>
-      <span class="step-arrow" aria-hidden="true">→</span>
-      <div class="step step-3">
-        <span class="step-num">3</span>
-        <div class="step-body">
-          <div class="step-title">Owner approval</div>
-          <div class="step-desc">Anything still ambiguous escalates to your phone for a one-tap call.</div>
+        <span class="step-arrow" aria-hidden="true">→</span>
+        <div class="step step-2">
+          <span class="step-num">2</span>
+          <div class="step-body">
+            <div class="step-title">Bounded judgment</div>
+            <div class="step-desc">NVIDIA Nemotron weighs the gray areas the rules can't — within strict limits.</div>
+          </div>
+        </div>
+        <span class="step-arrow" aria-hidden="true">→</span>
+        <div class="step step-3">
+          <span class="step-num">3</span>
+          <div class="step-body">
+            <div class="step-title">Owner approval</div>
+            <div class="step-desc">Anything still ambiguous escalates to your phone for a one-tap call.</div>
+          </div>
         </div>
       </div>
     </div>
@@ -222,6 +268,38 @@
     <div class="cta-row reveal d5">
       <a class="btn btn-primary" href="dashboard.html">Launch dashboard <span class="arrow">→</span></a>
       <a class="btn btn-ghost" href="dashboard.html#/overview">See it decide</a>
+    </div>
+
+    <div class="preview reveal d6" aria-hidden="true">
+      <div class="preview-frame">
+        <div class="preview-bar">
+          <span class="dots"><i></i><i></i><i></i></span>
+          <span class="preview-title">arbiter · decision log</span>
+          <span class="preview-live"><span class="lp"></span> LIVE</span>
+        </div>
+        <div class="preview-body">
+          <div class="prow prow-1">
+            <span class="ev">Northstar invoice paid<small>reconciled · no flags</small></span>
+            <span class="by">policy engine</span>
+            <span class="pill pill-approve">APPROVE</span>
+          </div>
+          <div class="prow prow-2">
+            <span class="ev">Duplicate invoice<small>already paid this cycle</small></span>
+            <span class="by">policy engine</span>
+            <span class="pill pill-block">BLOCK</span>
+          </div>
+          <div class="prow prow-3">
+            <span class="ev">Vendor bank-change<small>weak evidence · ambiguous</small></span>
+            <span class="by">owner · phone</span>
+            <span class="pill pill-escalate">ESCALATE</span>
+          </div>
+          <div class="prow prow-4 prow-hero">
+            <span class="ev">Agent buys marketing tool<small>off-goal spend</small></span>
+            <span class="by">policy engine</span>
+            <span class="pill pill-block">BLOCK</span>
+          </div>
+        </div>
+      </div>
     </div>
   </main>
 
@@ -241,7 +319,7 @@
           <span class="logo-mark mark-nvidia">
             <svg viewBox="0 0 24 24" fill="currentColor" role="img" aria-label="NVIDIA"><path d="M8.948 8.798v-1.43a6.7 6.7 0 0 1 .424-.018c3.922-.124 6.493 3.374 6.493 3.374s-2.774 3.851-5.75 3.851a3.61 3.61 0 0 1-1.158-.185v-4.346c1.528.185 1.837.857 2.747 2.385l2.04-1.714s-1.492-1.952-4-1.952a6.016 6.016 0 0 0-.796.035m0-4.735v2.138l.424-.027c5.45-.185 9.01 4.47 9.01 4.47s-4.08 4.964-8.33 4.964c-.37 0-.733-.034-1.095-.097v1.325c.3.038.61.062.91.062 3.957 0 6.82-2.022 9.594-4.409.46.371 2.345 1.265 2.733 1.66-2.636 2.207-8.78 3.984-12.256 3.984-.335 0-.657-.02-.975-.05v1.864H24V4.063H8.948zm0 10.326v1.131c-3.657-.652-4.673-4.454-4.673-4.454s1.756-1.944 4.673-2.26v1.237l-.006-.001c-1.531-.184-2.726 1.245-2.726 1.245s.671 2.405 2.732 3.101M2.456 10.731s2.167-3.198 6.498-3.53V6.034C4.158 6.43 0 10.42 0 10.42s2.353 6.804 8.948 7.426v-1.243c-4.84-.607-6.492-5.872-6.492-5.872z"/></svg>
           </span>
-          <span class="logo-text"><div class="logo-name name-nvidia">NVIDIA Nemotron</div><div class="logo-role">Bounded reasoning</div></span>
+          <span class="logo-text"><div class="logo-name name-nvidia">NVIDIA Nemotron</div><div class="logo-role">Bounded judgment</div></span>
         </div>
 
         <div class="logo">
