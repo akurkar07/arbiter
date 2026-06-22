@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Arbiter — Autonomous payment ops, on a leash</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath d='M24 3l16 6v11c0 11-7 19-16 24C15 39 8 31 8 20V9l16-6z' fill='%237a73ff'/%3E%3Cpath d='M16 25l5 5 11-12' fill='none' stroke='%23eef0ff' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -56,25 +57,6 @@
       mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, #000 30%, transparent 75%);
     }
 
-    /* ---- top bar (branding always visible) ---- */
-    .topbar {
-      position: relative; z-index: 3;
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 22px 30px;
-      max-width: 1180px; width: 100%; margin: 0 auto;
-    }
-    .brand { display: flex; align-items: center; gap: 11px; }
-    .brand-mark { filter: drop-shadow(0 4px 14px rgba(124,116,255,0.5)); }
-    .brand-text h1 { margin: 0; font-size: 19px; font-weight: 800; letter-spacing: -0.4px; line-height: 1; }
-    .brand-text h1 span { background: linear-gradient(90deg, var(--accent), #aaa4ff); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
-    .brand-text p { margin: 3px 0 0; color: var(--faint); font-size: 11.5px; letter-spacing: 0.3px; }
-    .top-link {
-      font-size: 13.5px; font-weight: 600; color: var(--muted);
-      padding: 8px 14px; border: 1px solid var(--line-2); border-radius: 9px;
-      transition: background 0.15s, color 0.15s, border-color 0.15s;
-    }
-    .top-link:hover { background: var(--surface); color: var(--text); border-color: var(--line-2); }
-
     /* ---- hero ---- */
     .hero {
       position: relative; z-index: 2; flex: 1;
@@ -82,6 +64,10 @@
       text-align: center; padding: 40px 24px 24px; gap: 22px;
       max-width: 880px; margin: 0 auto; width: 100%;
     }
+    .hero-brand { display: inline-flex; align-items: center; gap: 16px; margin-bottom: 2px; }
+    .hero-brand .brand-mark { filter: drop-shadow(0 4px 14px rgba(124,116,255,0.5)); }
+    .hero-brand-name { margin: 0; font-size: 56px; font-weight: 800; letter-spacing: -1.2px; line-height: 1; color: var(--text); }
+    .hero-brand-name span { color: var(--text); }
     .badge {
       display: inline-flex; align-items: center; gap: 8px;
       font-size: 12px; font-weight: 600; letter-spacing: 0.3px;
@@ -100,31 +86,30 @@
       line-height: 1.6; max-width: 60ch;
     }
 
-    .pills { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 2px; }
-    .pill {
-      display: inline-flex; align-items: center; gap: 8px;
-      font-size: 13px; font-weight: 600; color: var(--text);
-      background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
-      padding: 9px 14px;
-    }
-    .pill b { display: grid; place-items: center; width: 19px; height: 19px; border-radius: 6px; font-size: 11px; font-weight: 800; }
-    .pill-1 b { background: rgba(91,155,255,0.16); color: #79adff; }
-    .pill-2 b { background: rgba(118,185,0,0.16); color: var(--nvidia); }
-    .pill-3 b { background: rgba(240,169,46,0.16); color: #f0a92e; }
+    .steps { display: flex; align-items: stretch; justify-content: center; flex-wrap: wrap; gap: 12px; margin-top: 6px; }
+    .step { display: flex; align-items: flex-start; gap: 12px; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 15px 17px; flex: 1 1 200px; max-width: 232px; transition: border-color 0.18s, transform 0.18s; }
+    .step:hover { border-color: var(--line-2); transform: translateY(-2px); }
+    .step-num { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px; font-size: 13px; font-weight: 800; flex: 0 0 auto; }
+    .step-1 .step-num { background: rgba(91,155,255,0.16); color: #79adff; }
+    .step-2 .step-num { background: rgba(118,185,0,0.16); color: var(--nvidia); }
+    .step-3 .step-num { background: rgba(240,169,46,0.16); color: #f0a92e; }
+    .step-title { font-size: 14px; font-weight: 700; color: var(--text); line-height: 1.2; }
+    .step-desc { font-size: 12.5px; color: var(--muted); line-height: 1.5; margin-top: 3px; }
+    .step-arrow { align-self: center; color: var(--faint); font-size: 18px; flex: 0 0 auto; }
 
-    .cta-row { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; margin-top: 8px; }
+    .cta-row { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; justify-content: center; margin-top: 10px; }
     .btn {
       display: inline-flex; align-items: center; gap: 9px;
       font-size: 15px; font-weight: 700; font-family: inherit;
       padding: 13px 22px; border-radius: 12px; cursor: pointer;
-      border: 1px solid transparent; transition: transform 0.12s, box-shadow 0.18s, background 0.18s, border-color 0.18s;
+      border: 1px solid transparent; transition: transform 0.12s, box-shadow 0.18s, background 0.18s, border-color 0.18s, color 0.18s;
     }
-    .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 10px 30px -8px rgba(124,116,255,0.7); }
+    .btn-primary { background: var(--accent); color: #fff; font-size: 15.5px; padding: 15px 28px; box-shadow: 0 10px 30px -8px rgba(124,116,255,0.7); }
     .btn-primary:hover { background: #8b83ff; transform: translateY(-2px); box-shadow: 0 16px 40px -10px rgba(124,116,255,0.8); }
     .btn-primary .arrow { transition: transform 0.18s; }
     .btn-primary:hover .arrow { transform: translateX(4px); }
-    .btn-ghost { background: transparent; color: var(--text); border-color: var(--line-2); }
-    .btn-ghost:hover { background: var(--surface); transform: translateY(-2px); }
+    .btn-ghost { background: transparent; color: var(--muted); border-color: var(--line); font-weight: 600; }
+    .btn-ghost:hover { background: var(--surface); color: var(--text); border-color: var(--line-2); transform: translateY(-2px); }
 
     /* ---- tech strip ---- */
     .tech {
@@ -165,9 +150,12 @@
     @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
     @media (prefers-reduced-motion: reduce) { .reveal, .float { animation: none; opacity: 1; transform: none; } }
 
+    @media (max-width: 620px) {
+      .steps { flex-direction: column; align-items: stretch; }
+      .step { max-width: none; }
+      .step-arrow { display: none; }
+    }
     @media (max-width: 560px) {
-      .topbar { padding: 18px 18px; }
-      .brand-text p { display: none; }
       .tech-inner { flex-direction: column; gap: 16px; }
     }
   </style>
@@ -185,22 +173,16 @@
     </linearGradient>
   </defs></svg>
 
-  <!-- Top bar -->
-  <header class="topbar reveal d1">
-    <a class="brand" href="dashboard.html">
-      <svg class="brand-mark" viewBox="0 0 48 48" width="34" height="34" aria-hidden="true">
+  <!-- Hero -->
+  <main class="hero">
+    <a class="hero-brand reveal d1" href="dashboard.html" aria-label="Arbiter">
+      <svg class="brand-mark" viewBox="0 0 48 48" width="64" height="64" aria-hidden="true">
         <path d="M24 3l16 6v11c0 11-7 19-16 24C15 39 8 31 8 20V9l16-6z" fill="url(#lg)"/>
         <path d="M16 25l5 5 11-12" fill="none" stroke="#eef0ff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
-      <div class="brand-text">
-        <h1>Arb<span>iter</span></h1>
-        <p>Payment-ops agent</p>
-      </div>
+      <h1 class="hero-brand-name">Arb<span>iter</span></h1>
     </a>
-  </header>
 
-  <!-- Hero -->
-  <main class="hero">
     <span class="badge reveal d2"><span class="dot"></span> Nous Research × NVIDIA × Stripe</span>
 
     <h2 class="reveal d2">The agent that <span class="grad">doesn't trust itself</span> with your money.</h2>
@@ -211,10 +193,30 @@
       single pound leaves the account.
     </p>
 
-    <div class="pills reveal d4">
-      <span class="pill pill-1"><b>1</b> Deterministic rules</span>
-      <span class="pill pill-2"><b>2</b> Bounded judgment</span>
-      <span class="pill pill-3"><b>3</b> Owner approval</span>
+    <div class="steps reveal d4">
+      <div class="step step-1">
+        <span class="step-num">1</span>
+        <div class="step-body">
+          <div class="step-title">Deterministic rules</div>
+          <div class="step-desc">Hard-coded guards catch duplicates, mismatches and overrides — no LLM involved.</div>
+        </div>
+      </div>
+      <span class="step-arrow" aria-hidden="true">→</span>
+      <div class="step step-2">
+        <span class="step-num">2</span>
+        <div class="step-body">
+          <div class="step-title">Bounded judgment</div>
+          <div class="step-desc">Nemotron weighs the gray areas the rules can't — within strict limits.</div>
+        </div>
+      </div>
+      <span class="step-arrow" aria-hidden="true">→</span>
+      <div class="step step-3">
+        <span class="step-num">3</span>
+        <div class="step-body">
+          <div class="step-title">Owner approval</div>
+          <div class="step-desc">Anything still ambiguous escalates to your phone for a one-tap call.</div>
+        </div>
+      </div>
     </div>
 
     <div class="cta-row reveal d5">

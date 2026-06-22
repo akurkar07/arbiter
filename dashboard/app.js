@@ -628,7 +628,18 @@ function startLive() {
   el.sourcePill.classList.remove("source-sample");
   el.sourcePill.classList.add("source-live");
   el.toggleLive.textContent = "Go sample";
-  pollLive();
+  // Kick the backend so the live timeline actually plays: rebuild a fresh run,
+  // then start it. The agent decides server-side and we mirror it via /state.
+  // If the backend isn't reachable, pollLive() surfaces "LIVE (no backend)".
+  (async () => {
+    try {
+      await fetch("/reset", { method: "POST" });
+      await fetch("/run", { method: "POST" });
+    } catch (_) {
+      /* no backend; pollLive reports it */
+    }
+    pollLive();
+  })();
   pollTimer = setInterval(pollLive, POLL_MS);
 }
 
