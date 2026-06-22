@@ -29,6 +29,16 @@ dashboard at http://localhost:5173/dashboard.html and click **Run demo**.
   at the `approve_url` / `deny_url` the endpoint hands back. Start the core backend
   first, then click **Go live**.
 
+  ```powershell
+  # from the repo root
+  python -m venv .venv && .venv\Scripts\Activate.ps1
+  pip install -e ".[web]"
+  python -m uvicorn arbiter.web:app --host 127.0.0.1 --port 8000
+  ```
+
+  Then open http://127.0.0.1:8000 (the backend serves the dashboard itself) and
+  click **Run demo** / **Go live**.
+
 ## The contract
 
 Defined in `../04_integration_contract.md`. The dashboard only reads `/state` and

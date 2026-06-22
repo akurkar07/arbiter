@@ -22,6 +22,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from ..agent import ArbiterAgent
 from ..ledger import EventLedger
@@ -197,3 +198,9 @@ def approve(event_id: str) -> HTMLResponse:
 @app.api_route("/deny/{event_id}", methods=["GET", "POST"])
 def deny(event_id: str) -> HTMLResponse:
     return _resolve(event_id, DecisionKind.BLOCK)
+
+
+# Serve the rest of the dashboard (dashboard.html, app.js, styles.css, *.json)
+# as static files. Mounted last so the API routes above take precedence; the
+# mount catches everything else, including the landing page at "/".
+app.mount("/", StaticFiles(directory=str(DASHBOARD_DIR), html=True), name="dashboard")
