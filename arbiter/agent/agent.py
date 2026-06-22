@@ -1,4 +1,4 @@
-"""LedgerGuard agent core.
+"""Arbiter agent core.
 
 Ties the 3 layers together:
   1. deterministic rules  -> hard pass / hard fail / defer
@@ -20,7 +20,7 @@ from .nemotron import NemotronLayer, MockNemotron, to_policy_result
 from .escalation import EscalationHandler, ConsoleEscalation, escalate_result
 
 
-class LedgerGuardAgent:
+class ArbiterAgent:
     """The self-governing accountant."""
 
     def __init__(

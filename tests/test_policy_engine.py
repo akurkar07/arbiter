@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from ledgerguard.models import PolicyContext, DecisionKind
-from ledgerguard.policy import evaluate
-from ledgerguard.scenarios import load_scenario, list_scenarios
+from arbiter.models import PolicyContext, DecisionKind
+from arbiter.policy import evaluate
+from arbiter.scenarios import load_scenario, list_scenarios
 
 
 def _context_for(scenario_name: str) -> PolicyContext:
@@ -31,7 +31,7 @@ def test_scenario_decision(name: str) -> None:
 
 def test_duplicate_only_blocks_when_fingerprint_seen() -> None:
     """Same invoice payload must APPROVE when not a duplicate, BLOCK when seeded."""
-    from ledgerguard.models import AgentEvent, EventKind
+    from arbiter.models import AgentEvent, EventKind
 
     event, _expected, _raw = load_scenario("02_duplicate_invoice")
     # No fingerprint seeded → no duplicate hit. A vendor payment with no
@@ -48,7 +48,7 @@ def test_duplicate_only_blocks_when_fingerprint_seen() -> None:
 
 def test_instruction_override_checked_first() -> None:
     """Override phrase must BLOCK even when the invoice would otherwise approve."""
-    from ledgerguard.models import AgentEvent, EventKind
+    from arbiter.models import AgentEvent, EventKind
 
     event = AgentEvent(
         kind=EventKind.INVOICE_PAYMENT,
@@ -68,7 +68,7 @@ def test_instruction_override_checked_first() -> None:
 
 def test_unknown_event_escalates() -> None:
     """Safe default: anything no rule recognises escalates, never auto-approves."""
-    from ledgerguard.models import AgentEvent, EventKind
+    from arbiter.models import AgentEvent, EventKind
 
     event = AgentEvent(kind=EventKind.VENDOR_PAYMENT, amount=5000.0, vendor_known=True, vendor_history_count=10)
     result = evaluate(event, PolicyContext())

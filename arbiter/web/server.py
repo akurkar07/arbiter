@@ -1,4 +1,4 @@
-"""LedgerGuard demo web server.
+"""Arbiter demo web server.
 
 Serves the live demo the judges watch:
 
@@ -23,7 +23,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
 
-from ..agent import LedgerGuardAgent
+from ..agent import ArbiterAgent
 from ..ledger import EventLedger
 from ..models import EventKind, PolicyContext, DecisionKind
 from ..reinvest import fraud_catch_rate
@@ -87,7 +87,7 @@ class DemoState:
         self.ctx = PolicyContext()
         self.ledger = EventLedger()
         self.escalation = WebEscalation()
-        self.agent = LedgerGuardAgent(ctx=self.ctx, ledger=self.ledger, escalation=self.escalation)
+        self.agent = ArbiterAgent(ctx=self.ctx, ledger=self.ledger, escalation=self.escalation)
         self.stripe = StripeGlue()
         self.running = False
         self.done = False
@@ -144,7 +144,7 @@ class DemoState:
         }
 
 
-app = FastAPI(title="LedgerGuard", docs_url=None, redoc_url=None)
+app = FastAPI(title="Arbiter", docs_url=None, redoc_url=None)
 state = DemoState()
 
 

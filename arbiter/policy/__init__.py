@@ -1,4 +1,4 @@
-"""Deterministic policy engine — LedgerGuard's governance core."""
+"""Deterministic policy engine — Arbiter's governance core."""
 
 from .rules import evaluate, register_rule, RuleFn  # noqa: F401
 

@@ -11,7 +11,7 @@
 The entire governance core + agent loop + demo runner is built, tested, and committed:
 
 ```
-ledgerguard/
+arbiter/
   models.py             # AgentEvent, PolicyContext, PolicyResult, DecisionKind
   policy/rules.py       # 10 deterministic rules (the moat)
   agent/
@@ -22,7 +22,7 @@ ledgerguard/
   reinvest.py           # self-funded reinvest + fraud catch-rate metric
   stripe_glue.py        # thin interface — YOUR webhook layer implements this
   scenarios.py          # loads JSON fixtures -> AgentEvent
-  cli.py                # demo runner (python -m ledgerguard.cli)
+  cli.py                # demo runner (python -m arbiter.cli)
 scenarios/*.json        # 10 fixtures covering the full demo storyboard
 tests/test_policy_engine.py  # 13 pytest, all passing
 ```
@@ -35,18 +35,18 @@ demo CLI: full timeline plays — earn, 4 blocks, 2 escalates, 2 self-blocks, re
 
 Run it yourself:
 ```bash
-cd ledgerguard
+cd arbiter
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 pytest                    # 13 passed
-python -m ledgerguard.cli # full demo timeline
+python -m arbiter.cli # full demo timeline
 ```
 
 ---
 
 ## Your interface — what you implement
 
-### 1. StripeGlue (ledgerguard/stripe_glue.py)
+### 1. StripeGlue (arbiter/stripe_glue.py)
 
 The agent core calls these methods. The current implementation is a no-op stub
 that records calls. You replace it with real Stripe test-mode calls using
@@ -72,7 +72,7 @@ beat, and `provision_capability` for the reinvest beat. You wire the real API.
 
 The ledger exposes a dashboard-ready timeline:
 ```python
-from ledgerguard.ledger import EventLedger
+from arbiter.ledger import EventLedger
 ledger.as_timeline()  # list[dict] with: t, id, kind, decision, reason, refs, risk, layer, amount, beat
 ```
 
@@ -83,7 +83,7 @@ Each entry has a `beat` field with the human-readable story line.
 
 Replace `ConsoleEscalation` with a real mobile approval UI:
 ```python
-from ledgerguard.agent import EscalationHandler
+from arbiter.agent import EscalationHandler
 
 class PhoneEscalation(EscalationHandler):
     def request_approval(self, event, result) -> DecisionKind:
@@ -128,10 +128,10 @@ edge cases, the format is:
 
 When your Stripe webhook fires, call the agent:
 ```python
-from ledgerguard.agent import LedgerGuardAgent
-from ledgerguard.models import AgentEvent, EventKind, PolicyContext
+from arbiter.agent import ArbiterAgent
+from arbiter.models import AgentEvent, EventKind, PolicyContext
 
-agent = LedgerGuardAgent(ctx=PolicyContext())
+agent = ArbiterAgent(ctx=PolicyContext())
 event = AgentEvent(kind=EventKind.INVOICE_PAYMENT, vendor_id="cust_x", ...)
 result = agent.decide(event, event_id="evt_001", demo_beat="Customer paid invoice")
 # result.decision == DecisionKind.APPROVE | BLOCK | ESCALATE

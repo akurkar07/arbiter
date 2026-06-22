@@ -1,4 +1,4 @@
-"""LedgerGuard demo web server package."""
+"""Arbiter demo web server package."""
 
 from .server import app
 

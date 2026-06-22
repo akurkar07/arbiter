@@ -1,4 +1,4 @@
-# LedgerGuard
+# Arbiter
 
 **The Stripe accountant that does not trust itself with your money.**
 
@@ -29,13 +29,13 @@ be **trusted** with money. Governance is the product moat, not a footnote.
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 pytest                       # policy engine passes all 10 scenarios
-python -m ledgerguard.cli    # plays the full demo timeline
+python -m arbiter.cli    # plays the full demo timeline
 ```
 
 ## Repo layout
 
 ```
-ledgerguard/
+arbiter/
   models.py            # core dataclasses + enums
   policy/rules.py      # deterministic policy engine (the moat)
   agent/nemotron.py    # bounded LLM layer (mockable, strict JSON)

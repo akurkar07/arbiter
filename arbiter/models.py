@@ -1,4 +1,4 @@
-"""Core data model for LedgerGuard.
+"""Core data model for Arbiter.
 
 Everything the policy engine, agent, and ledger operate on. Kept deliberately
 small and dependency-free so the deterministic governance layer can be tested

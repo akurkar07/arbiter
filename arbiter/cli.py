@@ -1,11 +1,11 @@
-"""Demo CLI runner — plays the full LedgerGuard timeline from the scenario set.
+"""Demo CLI runner — plays the full Arbiter timeline from the scenario set.
 
 One command runs the complete demo storyboard:
   earn -> operate -> block fraud -> escalate -> reinvest -> improve -> self-block
 
-    python -m ledgerguard.cli            # full timeline, auto-approve escalations
-    python -m ledgerguard.cli --interactive   # y/n on each escalation
-    python -m ledgerguard.cli --json          # emit the ledger timeline as JSON
+    python -m arbiter.cli            # full timeline, auto-approve escalations
+    python -m arbiter.cli --interactive   # y/n on each escalation
+    python -m arbiter.cli --json          # emit the ledger timeline as JSON
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ import argparse
 import json
 import sys
 
-from .agent import LedgerGuardAgent, ConsoleEscalation
+from .agent import ArbiterAgent, ConsoleEscalation
 from .ledger import EventLedger
 from .models import AgentEvent, EventKind, PolicyContext, DecisionKind
 from .reinvest import maybe_reinvest_event, REINVEST_THRESHOLD, fraud_catch_rate
@@ -32,7 +32,7 @@ def run(interactive: bool = False) -> dict:
     """Run the full demo timeline. Returns the ledger timeline as a dict."""
     ctx = PolicyContext()
     ledger = EventLedger()
-    agent = LedgerGuardAgent(
+    agent = ArbiterAgent(
         ctx=ctx,
         ledger=ledger,
         escalation=ConsoleEscalation(auto=not interactive),
@@ -42,7 +42,7 @@ def run(interactive: bool = False) -> dict:
     names = list_scenarios()
     total = len(names)
     print("=" * 72)
-    print("LedgerGuard — self-governing AI accountant. Demo timeline.")
+    print("Arbiter — self-governing AI accountant. Demo timeline.")
     print("=" * 72)
 
     for i, name in enumerate(names, 1):
@@ -74,7 +74,7 @@ def run(interactive: bool = False) -> dict:
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(prog="ledgerguard-demo", description="Run the LedgerGuard demo timeline.")
+    p = argparse.ArgumentParser(prog="arbiter-demo", description="Run the Arbiter demo timeline.")
     p.add_argument("--interactive", action="store_true", help="prompt y/n on each escalation")
     p.add_argument("--json", action="store_true", help="emit the timeline as JSON instead of human-readable")
     args = p.parse_args()
