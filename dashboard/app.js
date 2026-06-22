@@ -150,7 +150,7 @@ function isHero(row) {
 const CURRENCY_SYMBOL = { GBP: "£", USD: "$", EUR: "€" };
 
 function money(amount, currency = "GBP") {
-  if (amount == null) return "—";
+  if (amount == null) return "-";
   const sym = CURRENCY_SYMBOL[currency] || "";
   return sym + Number(amount).toFixed(2);
 }
@@ -277,7 +277,7 @@ function rowTemplate(row) {
     </td>
     <td><span class="lchip layer-${stage}">${STAGE_META[stage].name}</span></td>
     <td class="cell-risk">${riskChip(row.risk)}</td>
-    <td class="cell-amt">${row.amount != null ? money(row.amount, row.currency) : "—"}</td>
+    <td class="cell-amt">${row.amount != null ? money(row.amount, row.currency) : "-"}</td>
     <td><span class="vtag v-${row.decision}">${row.decision.toUpperCase()}</span></td>
     <td class="cell-go">›</td>`;
 
@@ -358,7 +358,7 @@ function buildTrace(row) {
     steps.push({
       status: "skip", label: "Not needed", deciding: false,
       title: "NVIDIA Nemotron", tech: "Bounded judgment",
-      text: "Policy was decisive — no model judgment required.", refs: [],
+      text: "Policy was decisive. No model judgment required.", refs: [],
     });
   } else if (stage === "model") {
     const status = row.decision === "approve" ? "pass" : row.decision === "block" ? "fail" : "warn";
@@ -372,7 +372,7 @@ function buildTrace(row) {
     steps.push({
       status: "pass", label: "Refined", deciding: false,
       title: "NVIDIA Nemotron", tech: "Bounded judgment",
-      text: "Bounded model refined the rationale within policy limits — it cannot widen them.",
+      text: "Bounded model refined the rationale within policy limits, but it cannot widen them.",
       refs: refs.model,
     });
   }
@@ -382,7 +382,7 @@ function buildTrace(row) {
     steps.push({
       status: "skip", label: "Not needed", deciding: false,
       title: "Owner approval", tech: "Phone tap",
-      text: "Resolved automatically — the owner was not contacted.", refs: [],
+      text: "Resolved automatically. The owner was not contacted.", refs: [],
     });
   } else {
     const deciding = stage === "owner" || row.decision === "escalate";
@@ -443,13 +443,13 @@ function renderDetail(id) {
       <h2 class="dh-beat">${escapeHtml(row.beat)}</h2>
     </div>
     <div class="dh-right">
-      <span class="dh-amount">${row.amount != null ? money(row.amount, row.currency) : "—"}</span>
+      <span class="dh-amount">${row.amount != null ? money(row.amount, row.currency) : "-"}</span>
       <span class="dh-verdict v-${row.decision}">${row.decision.toUpperCase()}</span>
     </div>`;
   if (isHero(row)) {
     el.detailHead.insertAdjacentHTML(
       "afterend",
-      `<div class="detail-banner">⛔ <span><b>Off-goal self-spend refused.</b> The agent tried to spend its own money outside its mandate — the budget guard stopped it.</span></div>`
+      `<div class="detail-banner">⛔ <span><b>Off-goal self-spend refused.</b> The agent tried to spend its own money outside its mandate, so the budget guard stopped it.</span></div>`
     );
   }
 
@@ -460,12 +460,12 @@ function renderDetail(id) {
     <div class="panel-body">
       <div class="kv">
         <div class="kv-row"><span class="k">Type</span><span class="v">${escapeHtml(KIND_LABEL[row.kind] || row.kind)}</span></div>
-        <div class="kv-row"><span class="k">Amount</span><span class="v">${row.amount != null ? money(row.amount, row.currency) : "—"}</span></div>
-        <div class="kv-row"><span class="k">Currency</span><span class="v">${escapeHtml(row.currency || "—")}</span></div>
+        <div class="kv-row"><span class="k">Amount</span><span class="v">${row.amount != null ? money(row.amount, row.currency) : "-"}</span></div>
+        <div class="kv-row"><span class="k">Currency</span><span class="v">${escapeHtml(row.currency || "-")}</span></div>
         ${row.category ? `<div class="kv-row"><span class="k">Category</span><span class="v">${escapeHtml(row.category)}</span></div>` : ""}
         <div class="kv-row"><span class="k">Event ID</span><span class="v mono">${escapeHtml(row.id)}</span></div>
         <div class="kv-row"><span class="k">Source</span><span class="v">${escapeHtml(sourceLine(row))}</span></div>
-        <div class="kv-row"><span class="k">Signals</span>${sigRefs.length ? refPillsHtml(sigRefs) : '<span class="v">—</span>'}</div>
+        <div class="kv-row"><span class="k">Signals</span>${sigRefs.length ? refPillsHtml(sigRefs) : '<span class="v">-</span>'}</div>
       </div>
     </div>`;
 
@@ -588,7 +588,7 @@ function showIdle() {
   el.spBeat.textContent = "No decisions yet";
   el.spSource.textContent = 'Press "Run demo" to watch the engine evaluate each event.';
   el.spAmount.textContent = "";
-  el.spVerdict.textContent = "—";
+  el.spVerdict.textContent = "-";
 
   applyRoute();
 }
@@ -785,7 +785,7 @@ async function runDemo() {
       setStatus(true);
       if (choice === "deny") {
         row.decision = "block";
-        row.reason = "Owner denied the bank-detail change from their phone — payment held for review.";
+        row.reason = "Owner denied the bank-detail change from their phone, so the payment is held for review.";
       } else {
         row.decision = "approve";
       }
