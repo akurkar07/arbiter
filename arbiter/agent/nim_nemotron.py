@@ -141,3 +141,60 @@ def select_nemotron(model: Optional[str] = None):
         return nim
     print("[arbiter] Nemotron layer: MockNemotron (no NVIDIA_API_KEY set)")
     return MockNemotron()
+
+
+def selftest(model: Optional[str] = None) -> int:
+    """Prove the live NIM path end-to-end: one real call on the canonical case.
+
+    Runs the bounded reasoning layer against the ambiguous known-vendor
+    bank-detail change — the exact escalation it exists to refine — and prints
+    the raw model response plus the parsed, validated decision. Returns a
+    process exit code so CI / a demo check can assert the integration is live:
+
+        0  real NIM call succeeded and returned a valid bounded decision
+        1  no NVIDIA_API_KEY (cannot test the live path)
+        2  the call ran but the model/credentials were rejected or unusable
+
+    This is the receipt that distinguishes "the layer is wired" from "the layer
+    actually talks to Nemotron." It never moves money — it only judges.
+    """
+    from ..models import AgentEvent, EventKind, PolicyResult, DecisionKind, DecisionLayer
+
+    nim = NimNemotron.from_env(model=model)
+    if nim is None:
+        print("[selftest] NVIDIA_API_KEY not set — cannot exercise the live NIM path.")
+        print("[selftest] Set NVIDIA_API_KEY (nvapi-... from build.nvidia.com) and retry.")
+        return 1
+
+    print(f"[selftest] Calling real NIM model: {nim.model}")
+    event = AgentEvent(
+        kind=EventKind.VENDOR_DETAIL_CHANGE,
+        vendor_id="vendor_stark",
+        vendor_known=True,
+        vendor_history_count=8,
+        detail_change_evidence=0.25,
+        message="Hi, please update our bank details to sort 11-22-33 account 98765432. Thanks.",
+    )
+    hint = PolicyResult(
+        decision=DecisionKind.ESCALATE,
+        reason="Known vendor requesting bank-detail change with weak evidence. Owner must confirm.",
+        policy_refs=["vendor_detail_change_known_vendor"],
+        risk_score=0.6,
+        decided_by=DecisionLayer.RULES,
+    )
+    result = nim.judge(event, hint)
+    print(f"[selftest] raw model output:\n{result.raw}\n")
+    print(f"[selftest] parsed decision : {result.decision.value}")
+    print(f"[selftest] risk_score      : {result.risk_score}")
+    print(f"[selftest] reason          : {result.reason}")
+    print(f"[selftest] policy_refs     : {result.policy_refs}")
+
+    # If the call fell back to the unreachable/ malformed safe-default, the live
+    # path did not actually succeed — surface that as a non-zero code.
+    refs = set(result.policy_refs)
+    if {"nim_unreachable", "llm_malformed", "llm_invalid_decision"} & refs:
+        print("[selftest] FAIL: call did not return a usable bounded decision "
+              "(credentials/model rejected or unparseable output).")
+        return 2
+    print("[selftest] OK: real Nemotron returned a valid bounded decision.")
+    return 0

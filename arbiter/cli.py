@@ -18,7 +18,8 @@ from .agent import ArbiterAgent, ConsoleEscalation
 from .agent.nim_nemotron import select_nemotron
 from .ledger import EventLedger
 from .models import AgentEvent, EventKind, PolicyContext, DecisionKind
-from .reinvest import maybe_reinvest_event, REINVEST_THRESHOLD, fraud_catch_rate
+from .reinvest import maybe_reinvest_event, REINVEST_THRESHOLD
+from .metrics import reinvest_improvement
 from .scenarios import load_scenario, list_scenarios
 from .stripe_glue import StripeGlue
 
@@ -69,17 +70,36 @@ def run(interactive: bool = False) -> dict:
     print(f"Net:        {ledger.net:+.2f}")
     print(f"Blocks:     {len(ledger.blocks())}")
     print(f"Escalations:{len(ledger.escalations())}")
-    print(f"Fraud catch-rate (before reinvest): {fraud_catch_rate(False):.2f}")
-    print(f"Fraud catch-rate (after  reinvest): {fraud_catch_rate(True):.2f}")
+    # The reinvest beat's honest, measured before/after — computed by re-running
+    # the real agent over the fraud scenario set, not asserted constants.
+    gov = reinvest_improvement()
+    b, a = gov["before"], gov["after"]
+    print("-" * 72)
+    print("Governance (measured over the fraud scenario set):")
+    print(f"  Fraud never auto-paid (catch-rate):  {b['catch_rate']:.0%}  ->  {a['catch_rate']:.0%}")
+    print(
+        f"  Resolved without a human (autonomy): {b['autonomous_rate']:.0%}  ->  {a['autonomous_rate']:.0%}"
+        f"   (+{gov['autonomy_gain']:.0%} after reinvest)"
+    )
+    print(
+        f"  Owner taps needed:                   {b['escalated']}  ->  {a['escalated']}"
+        "   (bank-reconciliation resolves the known-vendor change autonomously)"
+    )
     print("=" * 72)
-    return {"timeline": ledger.as_timeline(), "stripe_calls": [c.__dict__ for c in stripe.calls]}
+    return {"timeline": ledger.as_timeline(), "stripe_calls": [c.__dict__ for c in stripe.calls], "governance": gov}
 
 
 def main() -> int:
     p = argparse.ArgumentParser(prog="arbiter-demo", description="Run the Arbiter demo timeline.")
     p.add_argument("--interactive", action="store_true", help="prompt y/n on each escalation")
     p.add_argument("--json", action="store_true", help="emit the timeline as JSON instead of human-readable")
+    p.add_argument("--selftest", action="store_true",
+                   help="prove the live NVIDIA NIM Nemotron path with one real call, then exit")
     args = p.parse_args()
+
+    if args.selftest:
+        from .agent.nim_nemotron import selftest
+        return selftest()
 
     if args.json:
         out = run(interactive=False)

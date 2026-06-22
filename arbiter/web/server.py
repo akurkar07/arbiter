@@ -29,7 +29,7 @@ from ..agent import ArbiterAgent
 from ..agent.nim_nemotron import select_nemotron
 from ..ledger import EventLedger
 from ..models import AgentEvent, EventKind, PolicyContext, DecisionKind
-from ..reinvest import fraud_catch_rate
+from ..metrics import reinvest_improvement
 from ..scenarios import list_scenarios, load_scenario
 from ..stripe_glue import StripeGlue
 
@@ -135,16 +135,27 @@ class DemoState:
             self.thread.start()
 
     def snapshot(self) -> dict:
-        # capability is acquired once an approved fraud-detection self-spend lands,
-        # which is the reinvest beat — so the catch-rate ticks up live and honestly.
+        # The capability is acquired once an approved fraud-detection self-spend
+        # lands (the reinvest beat), so the autonomy figure ticks up live and
+        # honestly. Both numbers are MEASURED by re-running the real agent over
+        # the fraud scenario set — see arbiter.metrics — never hardcoded.
         has_capability = self.ledger.spend > 0
+        governance = reinvest_improvement()
+        current = governance["after"] if has_capability else governance["before"]
         return {
             "running": self.running,
             "done": self.done,
             "earnings": round(self.ledger.earnings, 2),
             "spend": round(self.ledger.spend, 2),
             "net": round(self.ledger.net, 2),
-            "catch_rate": fraud_catch_rate(has_capability),
+            # Headline meter the dashboard already binds to: the live autonomous-
+            # resolution rate (fraud resolved without a human tap). Moves 0.8->1.0
+            # the moment the agent reinvests in bank-reconciliation.
+            "catch_rate": current["autonomous_rate"],
+            # Full honest before/after so the dashboard can show the delta as a
+            # real measured number rather than an assertion.
+            "governance": governance,
+            "has_capability": has_capability,
             "awaiting_approval": self.escalation.pending,
             # insertion order matches dashboard/sample_state.json; the UI reverses
             # for display so the contract fixture and the live feed are identical.

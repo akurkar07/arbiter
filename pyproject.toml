@@ -15,7 +15,9 @@ dependencies = []
 [project.optional-dependencies]
 dev = ["pytest>=7", "pytest-cov>=4"]
 stripe = ["stripe>=8"]
-llm = ["httpx>=0.27"]
+# The bounded reasoning layer talks to NVIDIA NIM over the OpenAI-compatible API.
+# Optional so the offline demo (MockNemotron) still installs with zero deps.
+llm = ["openai>=1.30"]
 web = ["fastapi>=0.110", "uvicorn>=0.29"]
 
 [project.scripts]

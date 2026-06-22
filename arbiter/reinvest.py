@@ -37,12 +37,19 @@ def maybe_reinvest_event(earnings: float, threshold: float = REINVEST_THRESHOLD)
 
 
 def fraud_catch_rate(with_capability: bool) -> float:
-    """Honest improvement metric, measured on the scenario set.
+    """Honest improvement metric, MEASURED on the scenario set.
 
-    Without the fraud-detection capability the rules layer catches the 4 hard
-    frauds (duplicate, mismatch, new-vendor detail change, instruction override)
-    out of 6 fraud-adjacent scenarios = 4/6 ≈ 0.67. With the OCR/bank-reconciliation
-    capability the agent also catches the weak-evidence known-vendor change
-    autonomously = 5/6 ≈ 0.83. Real delta, no invented numbers.
+    Delegates to :mod:`arbiter.metrics`, which runs the real policy engine over
+    the fraud-relevant fixtures and tallies the outcomes — no constants. The
+    figure returned is the *autonomous-resolution rate* (fraud the agent refuses
+    without asking a human), which is the number reinvestment actually moves:
+    buying bank-reconciliation lets the agent resolve the weak-evidence
+    known-vendor detail-change on its own instead of buzzing the owner.
+
+    The deterministic catch-rate (fraud never auto-paid) is a flat 1.0 by
+    construction; see ``metrics.reinvest_improvement`` for both figures and the
+    full before/after the dashboard renders.
     """
-    return 0.83 if with_capability else 0.67
+    from .metrics import fraud_catch_rate as _measured
+
+    return _measured(with_capability)
