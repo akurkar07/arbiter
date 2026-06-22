@@ -15,6 +15,7 @@ import json
 import sys
 
 from .agent import ArbiterAgent, ConsoleEscalation
+from .agent.nim_nemotron import select_nemotron
 from .ledger import EventLedger
 from .models import AgentEvent, EventKind, PolicyContext, DecisionKind
 from .reinvest import maybe_reinvest_event, REINVEST_THRESHOLD, fraud_catch_rate
@@ -35,6 +36,7 @@ def run(interactive: bool = False) -> dict:
     agent = ArbiterAgent(
         ctx=ctx,
         ledger=ledger,
+        nemotron=select_nemotron(),
         escalation=ConsoleEscalation(auto=not interactive),
     )
     stripe = StripeGlue()
