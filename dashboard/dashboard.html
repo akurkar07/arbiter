@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Arbiter — Autonomous payment ops, on a leash</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Shared SVG defs (brand gradient) -->
+  <svg width="0" height="0" class="svg-defs" aria-hidden="true">
+    <defs>
+      <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#7a73ff" />
+        <stop offset="1" stop-color="#4f46e5" />
+      </linearGradient>
+    </defs>
+  </svg>
+
+  <div class="app">
+    <!-- ============ PERSISTENT BRAND SIDEBAR (always visible) ============ -->
+    <aside class="sidebar">
+      <a class="brand" href="#/overview" data-route="overview">
+        <svg class="brand-mark" viewBox="0 0 48 48" width="36" height="36" aria-hidden="true">
+          <path d="M24 3l16 6v11c0 11-7 19-16 24C15 39 8 31 8 20V9l16-6z" fill="url(#lg)"/>
+          <path d="M16 25l5 5 11-12" fill="none" stroke="#eef0ff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <div class="brand-text">
+          <h1>Arb<span>iter</span></h1>
+          <p>Payment-ops agent</p>
+        </div>
+      </a>
+
+      <nav class="nav">
+        <a class="nav-item active" data-route="overview" href="#/overview">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+          <span>Overview</span>
+        </a>
+        <a class="nav-item" data-scroll="log-section" href="#/overview">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+          <span>Decision log</span>
+        </a>
+        <a class="nav-item" data-scroll="engine-section" href="#/overview">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="6" r="2.4"/><circle cx="18" cy="18" r="2.4"/><path d="M8.1 11l7.8-4M8.1 13l7.8 4"/></svg>
+          <span>Decision engine</span>
+        </a>
+      </nav>
+
+      <div class="side-spacer"></div>
+
+      <div class="side-state">
+        <span id="status-pill" class="status-pill status-idle">● Idle</span>
+        <span id="source-pill" class="source-pill source-sample">SAMPLE DATA</span>
+      </div>
+
+      <div class="side-foot">
+        <span class="foot-label">Powered by</span>
+        <span class="foot-sponsors"><b class="s-stripe">Stripe</b> · <b class="s-nvidia">NVIDIA Nemotron</b> · <b class="s-nous">Nous Hermes</b></span>
+      </div>
+    </aside>
+
+    <!-- ============ MAIN ============ -->
+    <div class="main">
+      <header class="topbar">
+        <nav class="crumbs" id="crumbs">
+          <span class="crumb">Overview</span>
+        </nav>
+        <div class="controls">
+          <span class="brand-mini" aria-label="Arbiter">
+            <svg viewBox="0 0 48 48" width="20" height="20" aria-hidden="true">
+              <path d="M24 3l16 6v11c0 11-7 19-16 24C15 39 8 31 8 20V9l16-6z" fill="url(#lg)"/>
+              <path d="M16 25l5 5 11-12" fill="none" stroke="#eef0ff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <b>Arb<span>iter</span></b>
+          </span>
+          <button id="run-demo" class="btn btn-primary">▶ Run demo</button>
+          <button id="toggle-live" class="btn btn-quiet" title="Connect to a live backend at /state">Go live</button>
+        </div>
+      </header>
+
+      <!-- ---------- OVERVIEW VIEW ---------- -->
+      <section id="view-overview" class="view">
+        <div class="view-head">
+          <div>
+            <h2 class="view-title">Payment operations</h2>
+            <p class="view-sub">Every money action the agent took — and the guardrail that decided it.</p>
+          </div>
+        </div>
+
+        <!-- Stat row (minimal) -->
+        <div class="stats">
+          <div class="stat">
+            <span class="stat-label">Earned via Stripe</span>
+            <span class="stat-value" id="m-earnings">£0.00</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Agent spend</span>
+            <span class="stat-value" id="m-spend">£0.00</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Net</span>
+            <span class="stat-value" id="m-net">£0.00</span>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Fraud catch-rate</span>
+            <span class="stat-value" id="m-catch">0%</span>
+            <div class="catch-bar"><div class="catch-fill" id="m-catch-bar"></div></div>
+          </div>
+          <div class="stat stat-counts">
+            <div class="cc c-approve"><span id="c-approve">0</span><label>Approved</label></div>
+            <div class="cc c-escalate"><span id="c-escalate">0</span><label>Escalated</label></div>
+            <div class="cc c-block"><span id="c-block">0</span><label>Blocked</label></div>
+          </div>
+        </div>
+
+        <!-- Engine strip -->
+        <div class="panel" id="engine-section">
+          <div class="panel-head">
+            <h3>Decision engine</h3>
+            <span class="panel-meta">Every action passes through three layers</span>
+          </div>
+          <div class="pipeline">
+            <div class="stage stage-rules" id="stage-rules">
+              <span class="stage-step">1</span>
+              <div class="stage-body">
+                <span class="stage-name">Policy engine</span>
+                <span class="stage-tech">Deterministic rules</span>
+              </div>
+              <span class="stage-count" id="pc-rules">0</span>
+            </div>
+            <div class="pipe-arrow">→</div>
+            <div class="stage stage-model" id="stage-model">
+              <span class="stage-step">2</span>
+              <div class="stage-body">
+                <span class="stage-name">Bounded judgment</span>
+                <span class="stage-tech">NVIDIA Nemotron</span>
+              </div>
+              <span class="stage-count" id="pc-model">0</span>
+            </div>
+            <div class="pipe-arrow">→</div>
+            <div class="stage stage-owner" id="stage-owner">
+              <span class="stage-step">3</span>
+              <div class="stage-body">
+                <span class="stage-name">Owner approval</span>
+                <span class="stage-tech">Phone tap</span>
+              </div>
+              <span class="stage-count" id="pc-owner">0</span>
+            </div>
+          </div>
+
+          <!-- Spotlight: the event currently being decided -->
+          <div class="spotlight" id="spotlight">
+            <div class="sp-left">
+              <span class="sp-status" id="sp-status">Latest decision</span>
+              <div class="sp-headline">
+                <span class="sp-kicon" id="sp-icon"></span>
+                <div>
+                  <p class="sp-beat" id="sp-beat">Press “Run demo” to watch the agent work.</p>
+                  <p class="sp-source" id="sp-source">10 payment-ops events · earn, fraud, escalate, self-spend</p>
+                </div>
+              </div>
+            </div>
+            <div class="sp-right">
+              <span class="sp-amount" id="sp-amount"></span>
+              <span class="sp-verdict" id="sp-verdict">READY</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Approval card -->
+        <section id="approval-card" class="approval-card hidden">
+          <div class="approval-head">
+            <span class="approval-badge">📱 OWNER APPROVAL · phone tap</span>
+            <span class="approval-risk" id="approval-risk"></span>
+          </div>
+          <h2 id="approval-beat">—</h2>
+          <p id="approval-reason">—</p>
+          <div class="approval-wait" id="approval-wait"><span class="awl-dot"></span> Buzzing the owner’s phone… tap to decide</div>
+          <div class="approval-actions">
+            <button id="btn-approve" class="btn btn-approve">Approve</button>
+            <button id="btn-deny" class="btn btn-deny">Deny</button>
+          </div>
+        </section>
+
+        <!-- Decision log table -->
+        <div class="panel" id="log-section">
+          <div class="panel-head">
+            <h3>Decision log</h3>
+            <span class="panel-meta" id="log-count"></span>
+          </div>
+          <div class="dtable-wrap">
+            <table class="dtable">
+              <thead>
+                <tr>
+                  <th class="c-kind">Event</th>
+                  <th class="c-layer">Decided by</th>
+                  <th class="c-risk">Risk</th>
+                  <th class="c-amt">Amount</th>
+                  <th class="c-verdict">Verdict</th>
+                  <th class="c-go" aria-label="open"></th>
+                </tr>
+              </thead>
+              <tbody id="decisions"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---------- DETAIL VIEW ---------- -->
+      <section id="view-detail" class="view hidden">
+        <div id="detail-head" class="detail-head"></div>
+        <div class="detail-grid">
+          <div class="panel detail-panel" id="detail-event"></div>
+          <div class="panel detail-panel" id="detail-trace"></div>
+          <div class="panel detail-panel" id="detail-outcome"></div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- ============ END CARD ============ -->
+  <div id="end-card" class="end-card hidden">
+    <div class="end-card-inner">
+      <svg viewBox="0 0 48 48" width="56" height="56" aria-hidden="true">
+        <path d="M24 3l16 6v11c0 11-7 19-16 24C15 39 8 31 8 20V9l16-6z" fill="url(#lg)"/>
+        <path d="M16 25l5 5 11-12" fill="none" stroke="#eef0ff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <h2>Arb<span>iter</span></h2>
+      <ul>
+        <li>Earns through <b class="s-stripe">Stripe</b>.</li>
+        <li>Runs payment ops.</li>
+        <li>Blocks fraud.</li>
+        <li>Asks the owner when judgment is ambiguous.</li>
+        <li>Improves itself — without losing control.</li>
+      </ul>
+      <p class="end-stat" id="end-stat"></p>
+      <button id="end-card-close" class="btn btn-ghost">Replay ready · Close</button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
