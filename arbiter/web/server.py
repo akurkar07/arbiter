@@ -23,10 +23,12 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from ..agent import ArbiterAgent
+from ..agent.nim_nemotron import select_nemotron
 from ..ledger import EventLedger
-from ..models import EventKind, PolicyContext, DecisionKind
+from ..models import AgentEvent, EventKind, PolicyContext, DecisionKind
 from ..reinvest import fraud_catch_rate
 from ..scenarios import list_scenarios, load_scenario
 from ..stripe_glue import StripeGlue
@@ -88,7 +90,12 @@ class DemoState:
         self.ctx = PolicyContext()
         self.ledger = EventLedger()
         self.escalation = WebEscalation()
-        self.agent = ArbiterAgent(ctx=self.ctx, ledger=self.ledger, escalation=self.escalation)
+        self.agent = ArbiterAgent(
+            ctx=self.ctx,
+            ledger=self.ledger,
+            nemotron=select_nemotron(),
+            escalation=self.escalation,
+        )
         self.stripe = StripeGlue()
         self.running = False
         self.done = False
@@ -198,6 +205,85 @@ def approve(event_id: str) -> HTMLResponse:
 @app.api_route("/deny/{event_id}", methods=["GET", "POST"])
 def deny(event_id: str) -> HTMLResponse:
     return _resolve(event_id, DecisionKind.BLOCK)
+
+
+class AuthorizeRequest(BaseModel):
+    """A payment an external agent (e.g. a Hermes agent over MCP) wants to make.
+
+    Only ``kind`` and ``amount`` are usually required; the rest give the rules
+    engine the context it needs to judge well. Mirrors AgentEvent's flat shape.
+    """
+
+    kind: str
+    amount: float | None = None
+    currency: str = "GBP"
+    vendor_id: str | None = None
+    vendor_known: bool = False
+    vendor_history_count: int = 0
+    invoice_amount: float | None = None
+    detail_change_evidence: float = 0.0
+    ref: str | None = None
+    message: str = ""
+    category: str | None = None
+    event_id: str | None = None
+    beat: str | None = None
+
+
+@app.post("/authorize")
+def authorize(req: AuthorizeRequest) -> JSONResponse:
+    """Run an externally-submitted payment through the full 3-layer pipeline.
+
+    This is the Hermes-native seam: a Hermes agent calls the Arbiter MCP tool,
+    which POSTs here. The event runs through the *same* engine and lands in the
+    *same* ledger the dashboard polls — so a decision driven by an autonomous
+    agent shows up live on the dashboard exactly like a demo beat.
+
+    If the decision escalates, this call BLOCKS until a human resolves the gate
+    via /approve or /deny (the dashboard button or a phone tap). That block is
+    the point: the agent's payment genuinely waits on a human. FastAPI serves
+    sync endpoints from a threadpool, so this block never stalls /state or the
+    approval routes.
+    """
+    try:
+        kind = EventKind(req.kind)
+    except ValueError:
+        return JSONResponse(
+            {"error": f"unknown event kind {req.kind!r}", "valid_kinds": [k.value for k in EventKind]},
+            status_code=422,
+        )
+
+    event = AgentEvent(
+        kind=kind,
+        amount=req.amount,
+        currency=req.currency,
+        vendor_id=req.vendor_id,
+        vendor_known=req.vendor_known,
+        vendor_history_count=req.vendor_history_count,
+        invoice_amount=req.invoice_amount,
+        detail_change_evidence=req.detail_change_evidence,
+        ref=req.ref,
+        message=req.message,
+        category=req.category,
+    )
+    event_id = req.event_id or f"auth_{int(time.time() * 1000)}"
+    beat = req.beat or f"agent authorize: {req.kind}"
+
+    # Point the escalation handler at this event before deciding, exactly as the
+    # demo runner does — so a parked card names the right request.
+    state.escalation.current_id = event_id
+    state.escalation.current_beat = beat
+    result = state.agent.decide(event, event_id=event_id, demo_beat=beat)
+
+    return JSONResponse(
+        {
+            "decision": result.decision.value,
+            "reason": result.reason,
+            "risk_score": round(result.risk_score, 2),
+            "policy_refs": result.policy_refs,
+            "decided_by": result.decided_by.value,
+            "event_id": event_id,
+        }
+    )
 
 
 # Serve the rest of the dashboard (dashboard.html, app.js, styles.css, *.json)
