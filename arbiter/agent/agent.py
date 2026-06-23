@@ -48,7 +48,11 @@ class ArbiterAgent:
         # Layer 3: phone escalation for anything still ambiguous.
         if result.decision == DecisionKind.ESCALATE:
             owner = self.escalation.request_approval(event, result)
-            result = escalate_result(event, result, owner)
+            # A handler that returns ESCALATE is *holding* for a real owner tap
+            # (HoldEscalation) — keep the beat as a clean pending escalation
+            # rather than stamping a phantom "[owner decision]" onto it.
+            if owner != DecisionKind.ESCALATE:
+                result = escalate_result(event, result, owner)
 
         # Record + bookkeeping.
         self.ledger.record(event, result, event_id, demo_beat)

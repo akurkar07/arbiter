@@ -59,3 +59,17 @@ def escalate_result(event: AgentEvent, base: PolicyResult, owner: DecisionKind) 
         risk_score=base.risk_score,
         decided_by=DecisionLayer.ESCALATE,
     )
+
+
+class HoldEscalation:
+    """Escalation that does NOT auto-resolve — it leaves the beat pending.
+
+    For the business-day demo + the live dashboard: when an event escalates, the
+    honest state is "waiting on the owner's phone tap", not a silent auto-approve.
+    Returning ESCALATE keeps the beat as a genuine pending decision in the
+    timeline, which is exactly what the dashboard renders as the approval card.
+    The owner's real tap (dashboard POST /approve, or Twilio) resolves it.
+    """
+
+    def request_approval(self, event: AgentEvent, result: PolicyResult) -> DecisionKind:
+        return DecisionKind.ESCALATE
