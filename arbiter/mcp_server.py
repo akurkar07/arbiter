@@ -135,6 +135,61 @@ def authorize_payment(
 
 
 @mcp.tool()
+def ingest_invoice(
+    path: str,
+    vendor_known: bool = False,
+    vendor_history_count: int = 0,
+) -> dict:
+    """Drop an invoice file (PDF/image) and get a GOVERNED payment decision.
+
+    This is the accounts-payable front door: instead of you transcribing an
+    invoice into fields, hand Arbiter the document and it reads the vendor,
+    amount, currency, and invoice reference itself (a vision model), then runs
+    the proposed payment through the exact same governance pipeline as every
+    other payment. Reading an invoice grants no new power — an extracted payment
+    to a vendor the owner did not approve is still BLOCKED, a mismatch still
+    blocks, a detail change still escalates. The document is a new input to
+    governance, never a way around it.
+
+    The extractor never invents a figure: if it cannot read a vendor and a
+    positive amount, it returns ``status: "unreadable"`` and creates NO payment
+    request, rather than guessing a total.
+
+    Args:
+        path: filesystem path to the invoice (.pdf/.png/.jpg/.jpeg/.webp). Read
+            on the machine running this MCP server.
+        vendor_known: True if your own records show this is an established vendor
+            (the document cannot vouch for itself).
+        vendor_history_count: number of prior payments you have made to this
+            vendor, from your records.
+
+    Returns:
+        A dict with ``extraction`` (what was read off the document, including the
+        ``backend`` that read it — real vision vs mock), and either ``status:
+        "decided"`` with the full governance ``decision`` (decision/reason/
+        risk_score/policy_refs/executed/stripe_id), or a ``status`` of
+        "unreadable" / "server_unreachable" / "rejected" explaining why no
+        decision was reached. No money can move except through an APPROVE
+        decision returned here, exactly as with a typed payment.
+    """
+    from .ingest import ingest_invoice as _ingest
+
+    try:
+        return _ingest(
+            path,
+            base_url=BASE_URL,
+            vendor_known=vendor_known,
+            vendor_history_count=vendor_history_count,
+        )
+    except FileNotFoundError:
+        return {
+            "error": f"invoice file not found: {path}",
+            "hint": "Pass a path to a .pdf/.png/.jpg invoice readable on the MCP server host.",
+            "status": "no_file",
+        }
+
+
+@mcp.tool()
 def list_policy_rules() -> dict:
     """List the governance rules Arbiter enforces, in priority order.
 
