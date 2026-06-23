@@ -14,7 +14,8 @@ NIM is OpenAI-compatible, so we drive it with the ``openai`` SDK pointed at
 ``https://integrate.api.nvidia.com/v1``. Configure with two env vars:
 
     NVIDIA_API_KEY   required; the nvapi-... key from build.nvidia.com
-    NVIDIA_NIM_MODEL optional; defaults to nvidia/llama-3.1-nemotron-ultra-253b-v1
+                     (NVIDIA_NIM_KEY is accepted as an alias)
+    NVIDIA_NIM_MODEL optional; defaults to nvidia/llama-3.3-nemotron-super-49b-v1
 
 ``from_env`` returns ``None`` when no key is present, so the agent can fall
 back to ``MockNemotron`` and the demo never hard-fails offline.
@@ -29,7 +30,7 @@ from typing import Optional
 from ..models import AgentEvent, PolicyResult
 from .nemotron import NemotronResult, _coerce
 
-DEFAULT_MODEL = "nvidia/llama-3.1-nemotron-ultra-253b-v1"
+DEFAULT_MODEL = "nvidia/llama-3.3-nemotron-super-49b-v1"
 NIM_BASE_URL = "https://integrate.api.nvidia.com/v1"
 
 _SYSTEM_PROMPT = (
@@ -94,8 +95,8 @@ class NimNemotron:
 
     @classmethod
     def from_env(cls, model: Optional[str] = None) -> Optional["NimNemotron"]:
-        """Build from NVIDIA_API_KEY, or None if the key is absent."""
-        key = os.environ.get("NVIDIA_API_KEY")
+        """Build from NVIDIA_API_KEY (or NVIDIA_NIM_KEY alias), or None if absent."""
+        key = os.environ.get("NVIDIA_API_KEY") or os.environ.get("NVIDIA_NIM_KEY")
         if not key:
             return None
         return cls(api_key=key, model=model or os.environ.get("NVIDIA_NIM_MODEL", DEFAULT_MODEL))

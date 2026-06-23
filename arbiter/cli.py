@@ -16,8 +16,10 @@ import sys
 
 from .agent import ArbiterAgent, ConsoleEscalation
 from .agent.nim_nemotron import select_nemotron
+from .agent.spend_judge import select_spend_judge
 from .ledger import EventLedger
 from .models import AgentEvent, EventKind, PolicyContext, DecisionKind
+from .operator import BusinessOperator, demo_jobs
 from .reinvest import maybe_reinvest_event, REINVEST_THRESHOLD
 from .metrics import reinvest_improvement
 from .scenarios import load_scenario, list_scenarios
@@ -28,6 +30,68 @@ def _print_beat(idx: int, total: int, beat: str, decision: str, reason: str) -> 
     tag = {"approve": "OK  ", "block": "STOP", "escalate": "ASK "}.get(decision, decision[:4].upper())
     print(f"[{idx}/{total}] {tag} | {beat}")
     print(f"       -> {reason[:160]}")
+
+
+def run_operator() -> dict:
+    """Run the autonomous business-operator demo: paid jobs, margin-protected spend.
+
+    This is THE swing — Arbiter as a money-operator running a service business.
+    Each job earns (client pays), verifies the invoice through the existing fraud
+    engine, then budgets every delivery spend against that invoice's margin. A
+    spend that would kill the margin is refused by the agent's own rule.
+    """
+    agent = ArbiterAgent(
+        ctx=PolicyContext(),
+        ledger=EventLedger(),
+        nemotron=select_nemotron(),
+        escalation=ConsoleEscalation(auto=True),
+    )
+    op = BusinessOperator(
+        agent=agent,
+        stripe=StripeGlue(),
+        spend_judge=select_spend_judge(),
+        starting_balance=50.0,
+    )
+
+    print("=" * 72)
+    print("Arbiter — autonomous money-operator for a service business. Demo.")
+    print("=" * 72)
+    print(f"Starting balance: GBP {op.rollup.starting_balance:.2f}\n")
+
+    jobs = demo_jobs()
+    for job in jobs:
+        out = op.run_job(job)
+        if not out.revenue_booked:
+            print(f"[JOB {job.job_id}] {job.title}")
+            print(f"   EARN  -> STOP  revenue refused: {out.invoice_reason[:120]}")
+            print(f"   (£{job.revenue:.0f} never booked — bad invoice rejected)\n")
+            continue
+        print(f"[JOB {job.job_id}] {job.title}")
+        print(f"   EARN  -> OK    £{out.revenue:.0f} booked (margin floor £{out.protected_margin:.0f})")
+        for s in out.spends:
+            tag = "OK  " if s.paid else "STOP"
+            verb = "paid " if s.paid else "REFUSED"
+            print(f"   SPEND -> {tag}  {verb} {s.tool.name} (£{s.tool.cost:.0f}) — {s.reason[:96]}")
+            # Show the live reasoning narrative (NIM or mock) next to the hard gate.
+            j = s.judgement
+            print(f"          reasoning[{j.source}]: {j.reason[:96]}")
+        print(f"   LEDGER: cost £{out.cost_spent:.0f} | waste blocked £{out.waste_blocked:.0f} "
+              f"| margin kept £{out.margin_kept:.0f} | protected={out.margin_protected}\n")
+
+    r = op.rollup
+    print("=" * 72)
+    print("Business rollup (real money math):")
+    print(f"  Starting balance:        GBP {r.starting_balance:.2f}")
+    print(f"  Revenue booked:          GBP {r.revenue_booked:.2f}")
+    print(f"  Cost spent (delivery):   GBP {r.cost_spent:.2f}")
+    print(f"  Waste blocked:           GBP {r.waste_blocked:.2f}")
+    print(f"  Fraud revenue rejected:  GBP {r.fraud_revenue_rejected:.2f}")
+    print(f"  Net profit:              GBP {r.net_profit:+.2f}")
+    print(f"  Ending balance:          GBP {r.balance:.2f}")
+    print(f"  Jobs completed:          {sum(1 for j in r.jobs if j.revenue_booked)}/{len(r.jobs)}")
+    print(f"  Every margin protected:  {r.all_margins_protected}")
+    print("=" * 72)
+    return {"rollup": r.as_dict(), "stripe_calls": [c.__dict__ for c in op.stripe.calls]}
 
 
 def run(interactive: bool = False) -> dict:
@@ -93,6 +157,8 @@ def main() -> int:
     p = argparse.ArgumentParser(prog="arbiter-demo", description="Run the Arbiter demo timeline.")
     p.add_argument("--interactive", action="store_true", help="prompt y/n on each escalation")
     p.add_argument("--json", action="store_true", help="emit the timeline as JSON instead of human-readable")
+    p.add_argument("--operator", action="store_true",
+                   help="run the autonomous business-operator demo (earn -> verify -> margin-protected spend)")
     p.add_argument("--selftest", action="store_true",
                    help="prove the live NVIDIA NIM Nemotron path with one real call, then exit")
     args = p.parse_args()
@@ -100,6 +166,12 @@ def main() -> int:
     if args.selftest:
         from .agent.nim_nemotron import selftest
         return selftest()
+
+    if args.operator:
+        out = run_operator()
+        if args.json:
+            print(json.dumps(out, indent=2))
+        return 0
 
     if args.json:
         out = run(interactive=False)

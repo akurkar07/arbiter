@@ -27,9 +27,11 @@ from pydantic import BaseModel
 
 from ..agent import ArbiterAgent
 from ..agent.nim_nemotron import select_nemotron
+from ..agent.spend_judge import select_spend_judge
 from ..ledger import EventLedger
 from ..models import AgentEvent, EventKind, PolicyContext, DecisionKind
 from ..metrics import reinvest_improvement
+from ..operator import BusinessOperator, demo_jobs
 from ..scenarios import list_scenarios, load_scenario
 from ..stripe_glue import StripeGlue
 
@@ -100,6 +102,13 @@ class DemoState:
         self.running = False
         self.done = False
         self.thread: threading.Thread | None = None
+        # The autonomous business-operator runs on the SAME agent + ledger, so its
+        # earn/verify/spend/refuse decisions stream onto the same timeline the
+        # dashboard already polls. None until a run starts. ``operator_mode`` tells
+        # the dashboard which story is playing so it can pick the right headline.
+        self.operator: BusinessOperator | None = None
+        self.operator_mode = False
+        self.spend_judge = select_spend_judge()
 
     def _run(self, step_delay: float) -> None:
         for name in list_scenarios():
@@ -131,7 +140,57 @@ class DemoState:
                 return
             self.running = True
             self.done = False
+            self.operator_mode = False
             self.thread = threading.Thread(target=self._run, args=(step_delay,), daemon=True)
+            self.thread.start()
+
+    def _run_operator(self, step_delay: float) -> None:
+        """Play the business-operator timeline on the shared agent + ledger.
+
+        Each refused spend is surfaced to the owner through the same web
+        escalation gate the scenario demo uses: the worker thread parks on a real
+        approve/deny tap before moving on. The refusal itself is final (the agent
+        protected its own margin); the tap is the owner acknowledging it — the
+        human-in-the-loop beat the judges watch.
+        """
+        op = self.operator
+        assert op is not None
+
+        def on_refused(spend_ctx, result) -> None:
+            # Publish a pending card naming the refused spend, then block on the gate.
+            self.escalation.current_id = f"{spend_ctx.job_id}:refused:{spend_ctx.tool_name}"
+            self.escalation.current_beat = (
+                f"Refused: {spend_ctx.tool_name} (£{spend_ctx.cost:.0f}) on '{spend_ctx.job_title}'"
+            )
+            # request_approval blocks until /approve or /deny; the returned decision
+            # doesn't un-refuse the spend, it just records that the owner saw it.
+            self.escalation.request_approval(
+                AgentEvent(kind=EventKind.SELF_SPEND, amount=spend_ctx.cost,
+                           category=spend_ctx.tool_category, message=result.reason),
+                result,
+            )
+
+        for job in demo_jobs():
+            op.run_job(job, on_spend_refused=on_refused)
+            time.sleep(step_delay)
+
+        self.done = True
+        self.running = False
+
+    def start_operator(self, step_delay: float = 1.2) -> None:
+        with self.lock:
+            if self.running:
+                return
+            self.running = True
+            self.done = False
+            self.operator_mode = True
+            self.operator = BusinessOperator(
+                agent=self.agent,
+                stripe=self.stripe,
+                spend_judge=self.spend_judge,
+                starting_balance=50.0,
+            )
+            self.thread = threading.Thread(target=self._run_operator, args=(step_delay,), daemon=True)
             self.thread.start()
 
     def snapshot(self) -> dict:
@@ -157,6 +216,11 @@ class DemoState:
             "governance": governance,
             "has_capability": has_capability,
             "awaiting_approval": self.escalation.pending,
+            # When the business-operator is the active story, expose its per-job
+            # ledger + rollup so the dashboard can show "watch the business run":
+            # balance, revenue, cost, waste blocked, every margin protected.
+            "operator_mode": self.operator_mode,
+            "business": self.operator.rollup.as_dict() if self.operator is not None else None,
             # insertion order matches dashboard/sample_state.json; the UI reverses
             # for display so the contract fixture and the live feed are identical.
             "timeline": self.ledger.as_timeline(),
@@ -181,6 +245,18 @@ def get_state() -> JSONResponse:
 def run() -> dict:
     state.start()
     return {"running": True}
+
+
+@app.post("/run_operator")
+def run_operator() -> dict:
+    """Start the autonomous business-operator timeline (the swing demo).
+
+    Plays paid jobs through earn -> verify -> margin-protected spend on the same
+    shared ledger /state exposes, so the dashboard streams the operator's
+    decisions and per-job business rollup live.
+    """
+    state.start_operator()
+    return {"running": True, "operator_mode": True}
 
 
 @app.post("/reset")
