@@ -144,6 +144,7 @@ class JobOutcome:
     invoice_decision: str
     invoice_reason: str
     spends: list[SpendOutcome] = field(default_factory=list)
+    payment_id: Optional[str] = None  # real Stripe pi_.. when the live rail booked it
 
     @property
     def cost_spent(self) -> float:
@@ -180,6 +181,7 @@ class JobOutcome:
             "waste_blocked": round(self.waste_blocked, 2),
             "margin_kept": round(self.margin_kept, 2),
             "margin_protected": self.margin_protected,
+            "payment_id": self.payment_id,
             "spends": [s.as_dict() for s in self.spends],
         }
 
@@ -262,9 +264,11 @@ class BusinessOperator:
 
     def run_job(self, job: Job, on_spend_refused: Optional[RefusalHook] = None) -> JobOutcome:
         """Earn -> verify -> budget -> spend/refuse -> per-job ledger for one job."""
-        # 1. EARN — the client pays the invoice (Stripe test-mode checkout webhook).
-        self.stripe.create_checkout(job.invoice_ref, job.revenue, "GBP")
-        self.stripe.webhook_received("checkout.session.completed", job.invoice_ref)
+        # 1. EARN — the client pays the invoice. On the live rail this creates a
+        # real, confirmed test-mode PaymentIntent (pi_.. succeeded); on the stub it
+        # just records the intent. webhook_received models Stripe notifying the agent.
+        pay = self.stripe.create_payment(job.invoice_ref, job.revenue, "GBP")
+        self.stripe.webhook_received("payment_intent.succeeded", job.invoice_ref)
 
         # A replayed/duplicate invoice: seed the fingerprint so the existing
         # duplicate rule recognises it on verification (models "already paid once").
@@ -297,6 +301,7 @@ class BusinessOperator:
             revenue_booked=(inv.decision == DecisionKind.APPROVE),
             invoice_decision=inv.decision.value,
             invoice_reason=inv.reason,
+            payment_id=pay.stripe_id,
         )
         if not outcome.revenue_booked:
             # Bad invoice — revenue refused, no delivery spend. The verify beat.

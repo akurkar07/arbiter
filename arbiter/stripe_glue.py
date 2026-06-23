@@ -93,6 +93,18 @@ class StripeGlue:
         self.calls.append(c)
         return c
 
+    def create_payment(self, ref: str, amount: float, currency: str = "GBP") -> StripeCall:
+        """Record the inbound customer payment for a job (stub: no real PaymentIntent).
+
+        The operator's earn beat calls this when a client pays an invoice. The live
+        glue creates a real confirmed test-mode PaymentIntent; the stub just records
+        it so offline runs and tests need no Stripe key.
+        """
+        c = StripeCall(op="create_payment", ref=ref, amount=amount, currency=currency,
+                       notes="test-mode stub — would create a confirmed PaymentIntent")
+        self.calls.append(c)
+        return c
+
 
 class LiveStripeGlue(StripeGlue):
     """Real Stripe test-mode calls. Falls back to recording if the SDK errors.
@@ -132,6 +144,33 @@ class LiveStripeGlue(StripeGlue):
                            notes="live test-mode", stripe_id=session.id)
         except Exception as e:  # noqa: BLE001 — never let a rail error crash governance
             c = StripeCall(op="create_checkout", ref=ref, amount=amount, currency=currency,
+                           notes=f"live call failed, recorded only: {type(e).__name__}: {e}")
+        self.calls.append(c)
+        return c
+
+    def create_payment(self, ref: str, amount: float, currency: str = "GBP") -> StripeCall:
+        """Create a real, confirmed test-mode PaymentIntent — the inbound 'client paid'.
+
+        Uses Stripe's canonical test card token (pm_card_visa) and confirms inline,
+        so the result is a genuine money-in object on the rail: a ``pi_..`` id in
+        ``succeeded`` state with a real charge, retrievable from the test dashboard.
+        Redirects are disabled so confirmation completes synchronously. A rail error
+        is recorded rather than raised so a hiccup never crashes governance.
+        """
+        try:
+            pi = self._stripe.PaymentIntent.create(
+                amount=int(round(amount * 100)),
+                currency=currency.lower(),
+                payment_method="pm_card_visa",
+                confirm=True,
+                automatic_payment_methods={"enabled": True, "allow_redirects": "never"},
+                description=f"Arbiter: client pays invoice {ref}",
+                metadata={"invoice_ref": ref or ""},
+            )
+            c = StripeCall(op="create_payment", ref=ref, amount=amount, currency=currency,
+                           notes=f"live test-mode PaymentIntent ({pi.status})", stripe_id=pi.id)
+        except Exception as e:  # noqa: BLE001 — never let a rail error crash governance
+            c = StripeCall(op="create_payment", ref=ref, amount=amount, currency=currency,
                            notes=f"live call failed, recorded only: {type(e).__name__}: {e}")
         self.calls.append(c)
         return c
