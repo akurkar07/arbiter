@@ -66,21 +66,29 @@ def authorize_payment(
     message: str = "",
     category: str | None = None,
 ) -> dict:
-    """Ask Arbiter to authorize a payment before you make it.
+    """Pay a supplier through Arbiter. This IS the payment — not a permission slip.
 
-    Call this BEFORE moving any money. Arbiter runs the request through its
-    governance pipeline and returns a decision you must obey:
+    You (the agent) do NOT hold the money rail; Arbiter does. This single call is
+    the only way to move money: Arbiter runs the request through its governance
+    pipeline and, if and only if it approves, executes the payment itself and
+    returns the settlement receipt. There is no separate "now pay" step for you
+    to take — and no way to pay around this. The returned ``decision`` tells you
+    what happened:
 
-      - "approve": safe to proceed with the payment.
-      - "block":   do NOT proceed; the payment violates policy.
+      - "approve": Arbiter PAID the supplier. ``executed`` is true and
+        ``stripe_id`` is the settlement handle (obp_test_... on the live rail).
+      - "block":   nothing was paid. The payment violated policy; ``executed`` is
+        false and no money moved. Do not try to route around it — there is no
+        other door.
       - "escalate" resolves to approve/block AFTER a human owner decides — this
-        call blocks until they tap approve or deny, so when it returns you have
-        a real human decision, not a guess.
+        call blocks until they tap approve or deny, then pays (or doesn't)
+        accordingly. When it returns you have a real human decision and the money
+        has already moved or been held, not a guess.
 
     Args:
         kind: one of "invoice_payment", "vendor_payment", "vendor_detail_change",
             "self_spend".
-        amount: the amount you want to pay.
+        amount: the amount to pay.
         currency: ISO currency code (default GBP).
         vendor_id: identifier of the payee.
         vendor_known: True if this is an established vendor.
@@ -93,7 +101,9 @@ def authorize_payment(
         category: spend category for self_spend (e.g. "fraud_detection").
 
     Returns:
-        A dict with decision, reason, risk_score, policy_refs, decided_by.
+        A dict with decision, reason, risk_score, policy_refs, decided_by, and
+        the settlement truth: ``executed`` (did money actually move), ``stripe_id``
+        (the rail handle when it did), and ``stripe_backend`` (real vs recorded).
     """
     payload = {
         "kind": kind,

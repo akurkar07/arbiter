@@ -110,6 +110,48 @@ class PolicyResult:
 
 
 @dataclass(frozen=True)
+class SettlementResult:
+    """The result of asking Arbiter to *settle* a payment: decide AND execute.
+
+    This is what the single money door returns. It carries the full governance
+    decision plus the rail receipt, fused into one object so a caller can never
+    hold a decision without also holding the truth of whether money moved.
+
+    ``executed`` is True only when the decision was APPROVE *and* the payment
+    actually reached the Stripe rail. ``stripe_id`` is the real settlement
+    handle (``obp_test_...`` outbound payment, ``cs_...`` checkout) when the live
+    rail produced one; it stays None on the recording stub and on every
+    block/escalate — so a None stripe_id is proof no money moved on this call.
+    """
+
+    decision: DecisionKind
+    reason: str
+    policy_refs: list[str] = field(default_factory=list)
+    risk_score: float = 0.0
+    decided_by: DecisionLayer = DecisionLayer.RULES
+    executed: bool = False
+    stripe_id: Optional[str] = None
+    stripe_backend: str = "stub"
+    event_id: str = ""
+
+    @property
+    def moved_money(self) -> bool:
+        """True iff this settlement actually moved money on the rail."""
+        return self.executed and self.decision == DecisionKind.APPROVE
+
+    def as_policy_result(self) -> "PolicyResult":
+        """The governance verdict alone, for callers typed on PolicyResult
+        (e.g. the operator's refusal hook). Drops the rail receipt."""
+        return PolicyResult(
+            decision=self.decision,
+            reason=self.reason,
+            policy_refs=list(self.policy_refs),
+            risk_score=self.risk_score,
+            decided_by=self.decided_by,
+        )
+
+
+@dataclass(frozen=True)
 class SpendContext:
     """Per-job context for judging a delivery spend against its paid invoice.
 

@@ -93,13 +93,17 @@ class DemoState:
         self.ctx = demo_policy_context()  # the 3-supplier allowlist governs the demo
         self.ledger = EventLedger()
         self.escalation = WebEscalation()
+        # The agent is the sole holder of the Stripe rail. select_stripe() gives
+        # the real test-mode rail when STRIPE_SECRET_KEY is set, else the stub.
+        # No other object gets its own handle — every payment goes through
+        # agent.settle(), so nothing can pay around the engine.
         self.agent = ArbiterAgent(
             ctx=self.ctx,
             ledger=self.ledger,
             nemotron=select_nemotron(),
             escalation=self.escalation,
+            stripe=select_stripe(),
         )
-        self.stripe = select_stripe()  # real test-mode rail if STRIPE_SECRET_KEY set, else stub
         self.running = False
         self.done = False
         self.thread: threading.Thread | None = None
@@ -111,35 +115,34 @@ class DemoState:
         self.operator_mode = False
         self.spend_judge = select_spend_judge()
 
+    @property
+    def stripe(self):
+        """The single Stripe handle, owned by the agent. Read-only alias so the
+        /state snapshot and inbound-earn path share the agent's one rail."""
+        return self.agent.stripe
+
     def _run(self, step_delay: float) -> None:
         """Play the AP-autopilot business day on the shared agent + ledger.
 
         The coherent story the dashboard streams: revenue in, pay the approved
         suppliers, block the double-pay / overpay / unapproved stranger, and park
-        the weak-evidence bank change on a real owner tap. Only an APPROVED
-        decision reaches the Stripe rail.
+        the weak-evidence bank change on a real owner tap. Every beat goes through
+        agent.settle() — the single money door — so only an APPROVED decision
+        reaches the Stripe rail, and it reaches it the same way every front door
+        does (no separate pay path to drift out of sync).
         """
         for event_id, beat, event, seeds in business_day_events():
             # Seed any pre-demo payment fingerprints (for duplicate detection).
             for fp in seeds:
                 self.ctx.recent_payment_fingerprints.add((fp[0], fp[1], fp[2]))
 
-            # Earn beat: a customer paying an invoice arrives via a Stripe webhook.
-            if event.kind == EventKind.INVOICE_PAYMENT:
-                self.stripe.create_checkout(event.ref or "n/a", event.amount or 0, event.currency)
-                self.stripe.webhook_received("checkout.session.completed", event.ref)
-
             # Tell the escalation handler which event it's about to be asked about.
             self.escalation.current_id = event_id
             self.escalation.current_beat = beat
 
-            result = self.agent.decide(event, event_id=event_id, demo_beat=beat)
-
-            # Governance -> rail seam: only an APPROVED supplier payment moves money.
-            # A blocked or escalated decision never touches Stripe.
-            if result.decision == DecisionKind.APPROVE and event.kind == EventKind.VENDOR_PAYMENT and event.vendor_id:
-                self.stripe.pay_supplier(event.vendor_id, event.amount or 0.0,
-                                         event.currency, ref=event.ref)
+            # settle = decide + (on approve) execute on the rail. A blocked or
+            # escalated decision returns executed=False and never touches Stripe.
+            self.agent.settle(event, event_id=event_id, demo_beat=beat)
             time.sleep(step_delay)
 
         self.done = True
@@ -380,7 +383,11 @@ def authorize(req: AuthorizeRequest) -> JSONResponse:
     # demo runner does — so a parked card names the right request.
     state.escalation.current_id = event_id
     state.escalation.current_beat = beat
-    result = state.agent.decide(event, event_id=event_id, demo_beat=beat)
+    # settle(), not decide(): the agent decides AND, on approve, executes on the
+    # rail it alone holds. The caller gets the rail receipt, never a chance to
+    # pay around the engine. A block/escalate returns executed=False, stripe_id
+    # None — proof no money moved.
+    result = state.agent.settle(event, event_id=event_id, demo_beat=beat)
 
     return JSONResponse(
         {
@@ -390,6 +397,10 @@ def authorize(req: AuthorizeRequest) -> JSONResponse:
             "policy_refs": result.policy_refs,
             "decided_by": result.decided_by.value,
             "event_id": event_id,
+            # The settlement truth: did money move, and the rail handle if so.
+            "executed": result.executed,
+            "stripe_id": result.stripe_id,
+            "stripe_backend": result.stripe_backend,
         }
     )
 

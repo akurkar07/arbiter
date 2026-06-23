@@ -121,11 +121,15 @@ def test_authorize_blocks_unapproved_payee(client):
     assert body["decision"] == "block"
     assert "payee_not_approved" in body["policy_refs"]
     assert body["decided_by"] == "rules"
+    # Settlement truth: a block moves no money and produces no rail handle.
+    assert body["executed"] is False
+    assert body["stripe_id"] is None
 
 
 def test_authorize_approves_allowlisted_supplier(client):
     """An approved, established supplier paid the reconciled amount: the agent
-    is cleared to pay — autopilot, no human needed."""
+    is cleared to pay — autopilot, no human needed. settle() executes the
+    payment in the same call, so the response reports it as executed."""
     resp = client.post("/authorize", json={
         "kind": "vendor_payment", "vendor_id": "aws", "amount": 220.0,
         "invoice_amount": 220.0, "vendor_known": True, "vendor_history_count": 11,
@@ -135,3 +139,5 @@ def test_authorize_approves_allowlisted_supplier(client):
     body = resp.json()
     assert body["decision"] == "approve"
     assert "approved_supplier_payment" in body["policy_refs"]
+    # The agent didn't get a permission slip — Arbiter moved the money.
+    assert body["executed"] is True

@@ -352,15 +352,16 @@ class BusinessOperator:
                 f"{tool.rationale}".strip()
             ),
         )
-        result = self.agent.decide(
+        result = self.agent.settle(
             spend_event,
             event_id=f"{job.job_id}:spend:{tool.name}",
             demo_beat=f"Spend on '{job.title}': {tool.name} (£{tool.cost:.0f})",
         )
 
         if result.decision == DecisionKind.APPROVE:
-            # 5. Money OUT — pay for the tool via Stripe test-mode.
-            self.stripe.provision_capability(tool.category, tool.cost, "GBP")
+            # Money already moved inside settle() — the single door decides AND
+            # executes, so there's no separate pay line that could fire without a
+            # matching APPROVE (or be skipped after one).
             return SpendOutcome(
                 tool=tool,
                 status=SpendStatus.PAID,
@@ -384,7 +385,7 @@ class BusinessOperator:
         # spend — margin protection is the agent's own decision and stands.
         owner_confirmed = False
         if on_spend_refused is not None:
-            on_spend_refused(spend_ctx, result)
+            on_spend_refused(spend_ctx, result.as_policy_result())
             owner_confirmed = True
 
         return SpendOutcome(

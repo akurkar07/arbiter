@@ -53,9 +53,29 @@ A ready-to-merge config fragment lives at
 
 | Tool | What the agent uses it for |
 |------|----------------------------|
-| `mcp_arbiter_authorize_payment` | **Call before moving any money.** Returns `approve` / `block` / `escalate`. On `escalate` the call *blocks* until a human taps approve/deny, so the return value is a real decision, not a guess. |
+| `mcp_arbiter_authorize_payment` | **The only way to move money.** Arbiter holds the Stripe rail, not the agent. This call decides *and*, on approve, executes the payment itself — returning the settlement receipt (`executed`, `stripe_id`). A `block`/`escalate` moves nothing. There is no separate "pay" step and no way to pay around it. |
 | `mcp_arbiter_list_policy_rules` | Introspect the controls in force (priority order) — so the agent can explain *why* a payment was approved or blocked. |
 | `mcp_arbiter_get_ledger` | Pull the timestamped audit trail of every decision this session — the compliance view. |
+
+## How does the agent know *when* to call it? (the real answer)
+
+Two levels, and the second is the one that matters:
+
+1. **Soft (the tool description):** the `authorize_payment` description tells the
+   agent "this is the only way to move money." Hermes injects that into the
+   model's context, so a well-behaved agent calls it. On its own that's just a
+   convention — it relies on the agent being obedient.
+2. **Hard (the inversion):** the agent **does not hold the Stripe key — Arbiter
+   does.** `authorize_payment` is the *only* payment primitive in the agent's
+   toolset, and it fuses the decision with the execution: the engine decides,
+   and on approve Arbiter moves the money itself. The agent literally has no
+   other door to the rail. Skipping the gate doesn't skip a check — it skips the
+   only way to pay anyone at all.
+
+So "when does it call this?" stops being a question of the agent's good
+behaviour. It calls this whenever it wants to move money, because there is no
+other way to move money. The three governance layers stop being advice the agent
+*should* follow and become load-bearing: unavoidable, not optional.
 
 ## Why it proxies to the web server (one engine, one ledger)
 
