@@ -91,15 +91,50 @@ class NimNemotron:
         from openai import OpenAI
 
         self.model = model
+        self.base_url = base_url
         self._client = OpenAI(api_key=api_key, base_url=base_url, timeout=timeout)
+
+    @property
+    def provider(self) -> str:
+        """Human-readable name of the endpoint actually in use, for honest
+        boot banners: the real NVIDIA rail vs an OpenAI-compatible fallback."""
+        host = self.base_url.lower()
+        if "integrate.api.nvidia.com" in host:
+            return "NVIDIA NIM"
+        if "openrouter.ai" in host:
+            return "OpenRouter"
+        return self.base_url
 
     @classmethod
     def from_env(cls, model: Optional[str] = None) -> Optional["NimNemotron"]:
-        """Build from NVIDIA_API_KEY (or NVIDIA_NIM_KEY alias), or None if absent."""
-        key = os.environ.get("NVIDIA_API_KEY") or os.environ.get("NVIDIA_NIM_KEY")
+        """Build from env, or None when no key is present.
+
+        Two routes, picked by which key is set:
+
+          * NVIDIA NIM (default): NVIDIA_API_KEY (or NVIDIA_NIM_KEY alias) +
+            the integrate.api.nvidia.com base url.
+          * OpenRouter fallback: if NVIDIA_NIM_BASE_URL is set (e.g. when the
+            NVIDIA key has no inference entitlement and 403s), the same client
+            talks to that OpenAI-compatible endpoint instead. OpenRouter hosts
+            free Nemotron variants and supports response_format json_object, so
+            the bounded-judgement contract is unchanged — only the URL moves.
+
+        Resolution order for the key: NVIDIA_API_KEY, NVIDIA_NIM_KEY, then
+        OPENROUTER_API_KEY (so the fallback works with an or-key alone).
+        """
+        key = (
+            os.environ.get("NVIDIA_API_KEY")
+            or os.environ.get("NVIDIA_NIM_KEY")
+            or os.environ.get("OPENROUTER_API_KEY")
+        )
         if not key:
             return None
-        return cls(api_key=key, model=model or os.environ.get("NVIDIA_NIM_MODEL", DEFAULT_MODEL))
+        base_url = os.environ.get("NVIDIA_NIM_BASE_URL", NIM_BASE_URL)
+        return cls(
+            api_key=key,
+            model=model or os.environ.get("NVIDIA_NIM_MODEL", DEFAULT_MODEL),
+            base_url=base_url,
+        )
 
     def judge(self, event: AgentEvent, policy_hint: PolicyResult) -> NemotronResult:
         try:
@@ -138,7 +173,7 @@ def select_nemotron(model: Optional[str] = None):
 
     nim = NimNemotron.from_env(model=model)
     if nim is not None:
-        print(f"[arbiter] Nemotron layer: REAL NVIDIA NIM ({nim.model})")
+        print(f"[arbiter] Nemotron layer: REAL {nim.provider} ({nim.model})")
         return nim
     print("[arbiter] Nemotron layer: MockNemotron (no NVIDIA_API_KEY set)")
     return MockNemotron()
@@ -163,11 +198,13 @@ def selftest(model: Optional[str] = None) -> int:
 
     nim = NimNemotron.from_env(model=model)
     if nim is None:
-        print("[selftest] NVIDIA_API_KEY not set — cannot exercise the live NIM path.")
-        print("[selftest] Set NVIDIA_API_KEY (nvapi-... from build.nvidia.com) and retry.")
+        print("[selftest] No inference key set — cannot exercise the live path.")
+        print("[selftest] Set NVIDIA_API_KEY (nvapi-... from build.nvidia.com), or")
+        print("[selftest] OPENROUTER_API_KEY + NVIDIA_NIM_BASE_URL=https://openrouter.ai/api/v1")
+        print("[selftest] with NVIDIA_NIM_MODEL=<a free nemotron id>, and retry.")
         return 1
 
-    print(f"[selftest] Calling real NIM model: {nim.model}")
+    print(f"[selftest] Calling real {nim.provider} model: {nim.model}")
     event = AgentEvent(
         kind=EventKind.VENDOR_DETAIL_CHANGE,
         vendor_id="vendor_stark",
@@ -199,3 +236,13 @@ def selftest(model: Optional[str] = None) -> int:
         return 2
     print("[selftest] OK: real Nemotron returned a valid bounded decision.")
     return 0
+
+
+if __name__ == "__main__":  # pragma: no cover - module entry point
+    # Lets `python -m arbiter.agent.nim_nemotron` prove the live path and
+    # propagate the selftest exit code (0 ok / 1 no key / 2 rejected) so a
+    # deploy check or Atlas's key-drop verification can assert on it.
+    import sys
+
+    sys.exit(selftest())
+
