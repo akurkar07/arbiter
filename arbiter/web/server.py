@@ -28,12 +28,13 @@ from pydantic import BaseModel
 from ..agent import ArbiterAgent
 from ..agent.nim_nemotron import select_nemotron
 from ..agent.spend_judge import select_spend_judge
+from ..business_day import business_day_events
 from ..ledger import EventLedger
-from ..models import AgentEvent, EventKind, PolicyContext, DecisionKind
+from ..models import AgentEvent, EventKind, DecisionKind
 from ..metrics import reinvest_improvement
 from ..operator import BusinessOperator, demo_jobs
-from ..scenarios import list_scenarios, load_scenario
-from ..stripe_glue import StripeGlue
+from ..policy.config import demo_policy_context
+from ..stripe_glue import select_stripe
 
 DASHBOARD_DIR = Path(__file__).resolve().parent.parent.parent / "dashboard"
 
@@ -89,7 +90,7 @@ class DemoState:
         self.reset()
 
     def reset(self) -> None:
-        self.ctx = PolicyContext()
+        self.ctx = demo_policy_context()  # the 3-supplier allowlist governs the demo
         self.ledger = EventLedger()
         self.escalation = WebEscalation()
         self.agent = ArbiterAgent(
@@ -98,7 +99,7 @@ class DemoState:
             nemotron=select_nemotron(),
             escalation=self.escalation,
         )
-        self.stripe = StripeGlue()
+        self.stripe = select_stripe()  # real test-mode rail if STRIPE_SECRET_KEY set, else stub
         self.running = False
         self.done = False
         self.thread: threading.Thread | None = None
@@ -111,12 +112,16 @@ class DemoState:
         self.spend_judge = select_spend_judge()
 
     def _run(self, step_delay: float) -> None:
-        for name in list_scenarios():
-            event, _expected, raw = load_scenario(name)
-            beat = raw.get("demo_beat", name)
+        """Play the AP-autopilot business day on the shared agent + ledger.
 
+        The coherent story the dashboard streams: revenue in, pay the approved
+        suppliers, block the double-pay / overpay / unapproved stranger, and park
+        the weak-evidence bank change on a real owner tap. Only an APPROVED
+        decision reaches the Stripe rail.
+        """
+        for event_id, beat, event, seeds in business_day_events():
             # Seed any pre-demo payment fingerprints (for duplicate detection).
-            for fp in raw.get("seed_fingerprints", []):
+            for fp in seeds:
                 self.ctx.recent_payment_fingerprints.add((fp[0], fp[1], fp[2]))
 
             # Earn beat: a customer paying an invoice arrives via a Stripe webhook.
@@ -125,10 +130,16 @@ class DemoState:
                 self.stripe.webhook_received("checkout.session.completed", event.ref)
 
             # Tell the escalation handler which event it's about to be asked about.
-            self.escalation.current_id = name
+            self.escalation.current_id = event_id
             self.escalation.current_beat = beat
 
-            self.agent.decide(event, event_id=name, demo_beat=beat)
+            result = self.agent.decide(event, event_id=event_id, demo_beat=beat)
+
+            # Governance -> rail seam: only an APPROVED supplier payment moves money.
+            # A blocked or escalated decision never touches Stripe.
+            if result.decision == DecisionKind.APPROVE and event.kind == EventKind.VENDOR_PAYMENT and event.vendor_id:
+                self.stripe.pay_supplier(event.vendor_id, event.amount or 0.0,
+                                         event.currency, ref=event.ref)
             time.sleep(step_delay)
 
         self.done = True
@@ -221,6 +232,16 @@ class DemoState:
             # balance, revenue, cost, waste blocked, every margin protected.
             "operator_mode": self.operator_mode,
             "business": self.operator.rollup.as_dict() if self.operator is not None else None,
+            # The owner's approved-supplier allowlist + which Stripe backend is
+            # live, so the dashboard can show "Owner approved: ..." and whether
+            # supplier payments are real test-mode obp_... or recorded stubs.
+            "approved_payees": sorted(self.ctx.approved_payees) if self.ctx.approved_payees else [],
+            "stripe_backend": getattr(self.stripe, "backend", "stub"),
+            "supplier_payments": [
+                {"payee": c.payee, "amount": c.amount, "currency": c.currency,
+                 "stripe_id": c.stripe_id, "ref": c.ref}
+                for c in self.stripe.calls if c.op == "pay_supplier"
+            ],
             # insertion order matches dashboard/sample_state.json; the UI reverses
             # for display so the contract fixture and the live feed are identical.
             "timeline": self.ledger.as_timeline(),

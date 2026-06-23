@@ -35,6 +35,7 @@ from .agent.nim_nemotron import select_nemotron
 from .ledger import EventLedger
 from .models import AgentEvent, EventKind, DecisionKind
 from .policy.config import demo_policy_context
+from .stripe_glue import select_stripe
 
 
 def business_day_events() -> list[tuple[str, str, AgentEvent, list[tuple[str, float, str]]]]:
@@ -108,6 +109,7 @@ def run(interactive: bool = False) -> dict:
     """Play the business day through the real engine + allowlist. Returns timeline dict."""
     ctx = demo_policy_context()  # the 3-supplier allowlist
     ledger = EventLedger()
+    stripe = select_stripe()  # real test-mode rail if STRIPE_SECRET_KEY set, else stub
     agent = ArbiterAgent(
         ctx=ctx,
         ledger=ledger,
@@ -127,18 +129,35 @@ def run(interactive: bool = False) -> dict:
             ctx.recent_payment_fingerprints.add(fp)
         result = agent.decide(event, event_id=event_id, demo_beat=beat)
         tally[result.decision.value] = tally.get(result.decision.value, 0) + 1
+
+        # Money only moves on an APPROVED decision — the rail is never touched
+        # for a blocked or escalated event. This is the governance->rail seam:
+        # the engine decides, and only an approval reaches Stripe.
+        if result.decision == DecisionKind.APPROVE:
+            if event.kind == EventKind.VENDOR_PAYMENT and event.vendor_id:
+                stripe.pay_supplier(event.vendor_id, event.amount or 0.0,
+                                    event.currency, ref=event.ref)
+            elif event.kind == EventKind.INVOICE_PAYMENT:
+                stripe.create_checkout(event.ref or "n/a", event.amount or 0.0, event.currency)
+                stripe.webhook_received("checkout.session.completed", event.ref)
+
         tag = {"approve": "PAY  ", "block": "BLOCK", "escalate": "ASK  "}[result.decision.value]
         print(f"[{i}/{len(events)}] {tag} | {beat}")
         print(f"         -> {result.reason[:150]}")
 
+    paid_calls = [c for c in stripe.calls if c.op == "pay_supplier"]
     print("=" * 76)
     print(f"Paid: {tally['approve']}   Blocked: {tally['block']}   "
           f"Owner asked: {tally['escalate']}")
     print(f"Earnings: {ledger.earnings:.2f}   Spend: {ledger.spend:.2f}   "
           f"Net: {ledger.net:+.2f}")
+    print(f"Stripe [{stripe.backend}]: {len(paid_calls)} supplier payment(s) "
+          f"-> {[f'{c.payee} {c.amount:.0f}' + (f' {c.stripe_id}' if c.stripe_id else '') for c in paid_calls]}")
     print("=" * 76)
     return {"timeline": ledger.as_timeline(), "tally": tally,
-            "earnings": ledger.earnings, "spend": ledger.spend, "net": ledger.net}
+            "earnings": ledger.earnings, "spend": ledger.spend, "net": ledger.net,
+            "stripe_backend": stripe.backend,
+            "stripe_calls": [c.__dict__ for c in stripe.calls]}
 
 
 def main() -> int:
