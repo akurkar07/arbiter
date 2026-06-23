@@ -1,65 +1,75 @@
 {
-  "earnings": 480.0,
-  "spend": 0,
-  "net": 480.0,
+  "seed": 50.0,
+  "goal": 500.0,
+  "balance": 470.0,
+  "earnings": 800.0,
+  "spend": 105.0,
+  "net": 695.0,
+  "margin": 695.0,
   "catch_rate": 0.83,
   "awaiting_approval": {
-    "event_id": "04_vendor_bank_change_known_vendor",
-    "beat": "Escalate: long-standing vendor asks to change bank details with weak evidence. Owner's phone buzzes.",
-    "kind": "vendor_detail_change",
-    "reason": "Long-standing vendor requests a bank-detail change with weak evidence. Not clearly safe, not clearly fraud - owner decides.",
+    "event_id": "07_contractor_addon",
+    "beat": "Margin check: a \u00a3180 contractor add-on leaves a thin margin on a \u00a3320 job. Arbiter escalates to the owner.",
+    "kind": "self_spend",
+    "reason": "A \u00a3180 contractor add-on on a \u00a3320 job leaves only a thin margin. Not clearly worth it, not clearly wrong \u2014 the owner decides.",
     "risk": 0.55,
-    "approve_url": "/approve/04_vendor_bank_change_known_vendor",
-    "deny_url": "/deny/04_vendor_bank_change_known_vendor"
+    "amount": 180.0,
+    "currency": "GBP",
+    "approve_url": "/approve/07_contractor_addon",
+    "deny_url": "/deny/07_contractor_addon"
   },
   "timeline": [
     {
       "t": 1781992711.1215363,
-      "id": "01_invoice_normal_paid",
+      "id": "01_client_paid_northstar",
       "kind": "invoice_payment",
       "decision": "approve",
-      "reason": "Normal invoice payment reconciled \u2014 no policy red flags.",
+      "reason": "Stripe Checkout completed. Invoice INV-NS-118 verified and reconciled against the brand-video job \u2014 money in.",
       "refs": [
-        "invoice_normal_paid"
+        "invoice_verified"
       ],
       "risk": 0.05,
       "layer": "rules",
       "amount": 480.0,
       "currency": "GBP",
       "category": null,
-      "beat": "Earn: Northstar Studio pays a normal \u00a3480 invoice. Reconciled, no red flags."
+      "job": "Northstar \u2014 brand video",
+      "beat": "Client paid: Northstar Studio settles its \u00a3480 invoice. Verified and reconciled \u2014 money in."
     },
     {
       "t": 1781992711.1216471,
-      "id": "02_duplicate_invoice",
-      "kind": "vendor_payment",
-      "decision": "block",
-      "reason": "Duplicate payment fingerprint (vendor=vendor_acme, amount=320.0, ref=INV-2002) already seen.",
+      "id": "02_buy_stock_footage",
+      "kind": "self_spend",
+      "decision": "approve",
+      "reason": "Spend \u00a360 for stock footage to deliver the \u00a3480 job. Within the job's budget \u2014 margin stays healthy.",
       "refs": [
-        "duplicate_invoice"
+        "spend_within_budget"
       ],
-      "risk": 0.9,
+      "risk": 0.1,
       "layer": "rules",
-      "amount": 320.0,
+      "amount": 60.0,
       "currency": "GBP",
-      "category": null,
-      "beat": "Block: same vendor + amount + ref already paid this cycle. Double-payment prevented."
+      "category": "stock_footage",
+      "job": "Northstar \u2014 brand video",
+      "beat": "Buy to deliver: licenses \u00a360 of stock footage for the edit. Inside the job's budget."
     },
     {
-      "t": 1781992711.121706,
-      "id": "03_amount_mismatch",
-      "kind": "vendor_payment",
+      "t": 1781992711.1219358,
+      "id": "04_refuse_premium_plugin",
+      "kind": "self_spend",
       "decision": "block",
-      "reason": "Amount mismatch: invoice=480.0 GBP vs request=840.0 GBP.",
+      "reason": "Spend \u00a3520 for a 'pro suite' upgrade exceeds the entire \u00a3480 job revenue. Approving it would make the job unprofitable, so the agent refuses.",
       "refs": [
-        "amount_mismatch"
+        "spend_kills_margin"
       ],
-      "risk": 0.85,
+      "risk": 0.8,
       "layer": "rules",
-      "amount": 840.0,
+      "amount": 520.0,
       "currency": "GBP",
-      "category": null,
-      "beat": "Block: invoice says \u00a3480 but the payment request is \u00a3840. Overpayment caught."
+      "category": "premium_tooling",
+      "job": "Northstar \u2014 brand video",
+      "margin_killer": true,
+      "beat": "Refused: a \u00a3520 'pro suite' upgrade costs more than the entire \u00a3480 job \u2014 it would make the job unprofitable. Blocked."
     }
   ]
 }

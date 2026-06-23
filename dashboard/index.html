@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Arbiter: Autonomous payment ops, on a leash</title>
+  <title>Arbiter: Autonomous money-operator, running the back office</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath d='M24 3l16 6v11c0 11-7 19-16 24C15 39 8 31 8 20V9l16-6z' fill='%237a73ff'/%3E%3Cpath d='M16 25l5 5 11-12' fill='none' stroke='%23eef0ff' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -223,27 +223,28 @@
 
     <span class="badge reveal d2"><span class="dot"></span> Nous Research × NVIDIA × Stripe</span>
 
-    <h2 class="reveal d2">The agent that <span class="grad">doesn't trust itself</span> with your money.</h2>
+    <h2 class="reveal d2">The agent that runs a business and <span class="grad">refuses to lose money.</span></h2>
 
     <p class="sub reveal d3">
-      A Nous-powered operator runs your payments end-to-end, earning through Stripe, reconciling,
-      and catching fraud on its own. But every move it proposes must clear three independent
-      guardrails before a single pound leaves the account.
+      Seeded with £50, a Nous-powered operator runs a real service back office: it takes each client
+      payment through Stripe, reads the job, and buys what it needs to deliver — but budgets every spend
+      against that invoice, so it never kills the margin. Anything that would make a job unprofitable is
+      refused on the spot, or escalated to your phone.
     </p>
 
     <div class="flow reveal d4">
       <div class="operator">
         <span class="op-badge">Nous operator</span>
-        <p class="op-text">Reads your books and <b>proposes</b> every payment, payout and reinvestment on its own.</p>
+        <p class="op-text">Reads each job, takes the client's payment, and <b>buys what it needs to deliver</b> — on its own.</p>
       </div>
       <span class="flow-arrow" aria-hidden="true">↓</span>
-      <div class="leash-cap">Every proposal must clear three guardrails</div>
+      <div class="leash-cap">Every spend is checked against the job's margin</div>
       <div class="steps">
         <div class="step step-1">
           <span class="step-num">1</span>
           <div class="step-body">
-            <div class="step-title">Deterministic rules</div>
-            <div class="step-desc">Hard-coded guards catch duplicates, mismatches and overrides. No LLM involved.</div>
+            <div class="step-title">Budget &amp; margin</div>
+            <div class="step-desc">Hard rules refuse any spend that would cost more than the job brings in. No LLM involved.</div>
           </div>
         </div>
         <span class="step-arrow" aria-hidden="true">→</span>
@@ -259,44 +260,44 @@
           <span class="step-num">3</span>
           <div class="step-body">
             <div class="step-title">Owner approval</div>
-            <div class="step-desc">Anything still ambiguous escalates to your phone for a one-tap call.</div>
+            <div class="step-desc">A borderline, margin-thin spend escalates to your phone for a one-tap call.</div>
           </div>
         </div>
       </div>
     </div>
 
     <div class="cta-row reveal d5">
-      <a class="btn btn-primary" href="dashboard.html">Launch dashboard <span class="arrow">→</span></a>
-      <a class="btn btn-ghost" href="dashboard.html#/overview">See it decide</a>
+      <a class="btn btn-primary" href="dashboard.html">Watch it run <span class="arrow">→</span></a>
+      <a class="btn btn-ghost" href="dashboard.html#/overview">See the live feed</a>
     </div>
 
     <div class="preview reveal d6" aria-hidden="true">
       <div class="preview-frame">
         <div class="preview-bar">
           <span class="dots"><i></i><i></i><i></i></span>
-          <span class="preview-title">arbiter · decision log</span>
+          <span class="preview-title">arbiter · live business</span>
           <span class="preview-live"><span class="lp"></span> LIVE</span>
         </div>
         <div class="preview-body">
           <div class="prow prow-1">
-            <span class="ev">Northstar invoice paid<small>reconciled · no flags</small></span>
+            <span class="ev">Northstar pays £480 invoice<small>verified · money in</small></span>
             <span class="by">policy engine</span>
             <span class="pill pill-approve">APPROVE</span>
           </div>
           <div class="prow prow-2">
-            <span class="ev">Duplicate invoice<small>already paid this cycle</small></span>
+            <span class="ev">Buys £60 of stock footage<small>within the job's budget</small></span>
             <span class="by">policy engine</span>
-            <span class="pill pill-block">BLOCK</span>
+            <span class="pill pill-approve">APPROVE</span>
           </div>
           <div class="prow prow-3">
-            <span class="ev">Vendor bank-change<small>weak evidence · ambiguous</small></span>
+            <span class="ev">£180 contractor add-on<small>thin margin · ambiguous</small></span>
             <span class="by">owner · phone</span>
             <span class="pill pill-escalate">ESCALATE</span>
           </div>
           <div class="prow prow-4 prow-hero">
-            <span class="ev">Agent buys marketing tool<small>off-goal spend</small></span>
+            <span class="ev">Buys £520 “pro suite”<small>would make the job unprofitable</small></span>
             <span class="by">policy engine</span>
-            <span class="pill pill-block">BLOCK</span>
+            <span class="pill pill-block">REFUSE</span>
           </div>
         </div>
       </div>

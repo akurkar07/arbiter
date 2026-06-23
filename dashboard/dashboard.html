@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Arbiter: Autonomous payment ops, on a leash</title>
+  <title>Arbiter: Autonomous money-operator, running the back office</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -30,22 +30,26 @@
         </svg>
         <div class="brand-text">
           <h1>Arb<span>iter</span></h1>
-          <p>Payment-ops agent</p>
+          <p>Autonomous money-operator</p>
         </div>
       </a>
 
       <nav class="nav">
         <a class="nav-item active" data-route="overview" href="#/overview">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
-          <span>Overview</span>
+          <span>Live business</span>
         </a>
         <a class="nav-item" data-scroll="log-section" href="#/overview">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
-          <span>Decision log</span>
+          <span>Event feed</span>
+        </a>
+        <a class="nav-item" data-scroll="jobs-section" href="#/overview">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="8" cy="7" r="1.4" fill="currentColor" stroke="none"/><circle cx="14" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="10" cy="17" r="1.4" fill="currentColor" stroke="none"/></svg>
+          <span>Per-job ledger</span>
         </a>
         <a class="nav-item" data-scroll="engine-section" href="#/overview">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="6" r="2.4"/><circle cx="18" cy="18" r="2.4"/><path d="M8.1 11l7.8-4M8.1 13l7.8 4"/></svg>
-          <span>Decision engine</span>
+          <span>Spend engine</span>
         </a>
       </nav>
 
@@ -78,48 +82,76 @@
       <section id="view-overview" class="view">
         <div class="view-head">
           <div>
-            <h2 class="view-title">Payment operations</h2>
-            <p class="view-sub">Every money action the agent took, and the guardrail that decided it.</p>
+            <h2 class="view-title">Back office, running live</h2>
+            <p class="view-sub">Arbiter earns from client invoices, buys what each job needs, and refuses any spend that would kill the margin.</p>
           </div>
         </div>
 
-        <!-- Stat row (minimal) -->
+        <!-- Seed → Goal → Balance header -->
+        <section class="biz-header">
+          <div class="bh-main">
+            <span class="bh-eyebrow"><span class="bh-live-dot"></span> Autonomous back office · started from a £50 seed</span>
+            <div class="bh-balrow">
+              <div class="bh-bal">
+                <span class="bh-bal-val" id="bh-balance">£50.00</span>
+                <span class="bh-bal-cap">balance now</span>
+              </div>
+              <div class="bh-seedgoal">
+                <span class="sg-seed">Seed <b id="bh-seed">£50</b></span>
+                <span class="sg-arrow">→</span>
+                <span class="sg-goal">Goal <b id="bh-goal">£500</b></span>
+                <span class="sg-pct" id="bh-goal-pct">0%</span>
+              </div>
+            </div>
+            <div class="bh-progress"><div class="bh-progress-fill" id="bh-progress"></div></div>
+            <div class="bh-catch">
+              <span class="bh-catch-label">Fraud screening capability</span>
+              <div class="catch-bar"><div class="catch-fill" id="m-catch-bar"></div></div>
+              <span class="bh-catch-val" id="m-catch">0%</span>
+            </div>
+          </div>
+          <div class="bh-spark">
+            <span class="bh-spark-label">Balance over time</span>
+            <svg class="spark" id="balance-spark" viewBox="0 0 320 96" preserveAspectRatio="none" aria-hidden="true"></svg>
+          </div>
+        </section>
+
+        <!-- Stat row: the business at a glance -->
         <div class="stats">
-          <div class="stat">
-            <span class="stat-label">Earned via Stripe</span>
-            <span class="stat-value" id="m-earnings">£0.00</span>
-          </div>
-          <div class="stat">
-            <span class="stat-label">Agent spend</span>
-            <span class="stat-value" id="m-spend">£0.00</span>
-          </div>
-          <div class="stat">
-            <span class="stat-label">Net</span>
+          <div class="stat s-balance">
+            <span class="stat-label">Balance</span>
             <span class="stat-value" id="m-net">£0.00</span>
           </div>
-          <div class="stat">
-            <span class="stat-label">Fraud catch-rate</span>
-            <span class="stat-value" id="m-catch">0%</span>
-            <div class="catch-bar"><div class="catch-fill" id="m-catch-bar"></div></div>
+          <div class="stat s-rev">
+            <span class="stat-label">Revenue in</span>
+            <span class="stat-value" id="m-earnings">£0.00</span>
+          </div>
+          <div class="stat s-cost">
+            <span class="stat-label">Cost out</span>
+            <span class="stat-value" id="m-spend">£0.00</span>
+          </div>
+          <div class="stat s-margin">
+            <span class="stat-label">Margin kept</span>
+            <span class="stat-value" id="m-margin">£0.00</span>
           </div>
           <div class="stat stat-counts">
             <div class="cc c-approve"><span id="c-approve">0</span><label>Approved</label></div>
             <div class="cc c-escalate"><span id="c-escalate">0</span><label>Escalated</label></div>
-            <div class="cc c-block"><span id="c-block">0</span><label>Blocked</label></div>
+            <div class="cc c-block"><span id="c-block">0</span><label>Refused</label></div>
           </div>
         </div>
 
         <!-- Engine strip -->
         <div class="panel" id="engine-section">
           <div class="panel-head">
-            <h3>Decision engine</h3>
-            <span class="panel-meta">Every action passes through three layers</span>
+            <h3>Spend engine</h3>
+            <span class="panel-meta">Every spend is judged against the job's margin, in three layers</span>
           </div>
           <div class="pipeline">
             <div class="stage stage-rules" id="stage-rules">
               <span class="stage-step">1</span>
               <div class="stage-body">
-                <span class="stage-name">Policy engine</span>
+                <span class="stage-name">Budget &amp; margin</span>
                 <span class="stage-tech">Deterministic rules</span>
               </div>
               <span class="stage-count" id="pc-rules">0</span>
@@ -151,8 +183,8 @@
               <div class="sp-headline">
                 <span class="sp-kicon" id="sp-icon"></span>
                 <div>
-                  <p class="sp-beat" id="sp-beat">Press “Run demo” to watch the agent work.</p>
-                  <p class="sp-source" id="sp-source">10 payment-ops events · earn, fraud, escalate, self-spend</p>
+                  <p class="sp-beat" id="sp-beat">Press “Run demo” to watch the business run.</p>
+                  <p class="sp-source" id="sp-source">Client pays · agent verifies · buys to deliver · refuses margin-killers</p>
                 </div>
               </div>
             </div>
@@ -163,7 +195,7 @@
           </div>
         </div>
 
-        <!-- Approval card -->
+        <!-- Approval card: the margin-killer escalation -->
         <section id="approval-card" class="approval-card hidden">
           <div class="approval-head">
             <span class="approval-badge">📱 OWNER APPROVAL · phone tap</span>
@@ -171,17 +203,17 @@
           </div>
           <h2 id="approval-beat">-</h2>
           <p id="approval-reason">-</p>
-          <div class="approval-wait" id="approval-wait"><span class="awl-dot"></span> Buzzing the owner’s phone… tap to decide</div>
+          <div class="approval-wait" id="approval-wait"><span class="awl-dot"></span> Buzzing the owner’s phone… tap to protect the margin</div>
           <div class="approval-actions">
-            <button id="btn-approve" class="btn btn-approve">Approve</button>
-            <button id="btn-deny" class="btn btn-deny">Deny</button>
+            <button id="btn-approve" class="btn btn-approve">Approve spend</button>
+            <button id="btn-deny" class="btn btn-deny">Deny — protect margin</button>
           </div>
         </section>
 
-        <!-- Decision log table -->
+        <!-- Live event feed -->
         <div class="panel" id="log-section">
           <div class="panel-head">
-            <h3>Decision log</h3>
+            <h3>Live event feed</h3>
             <span class="panel-meta" id="log-count"></span>
           </div>
           <div class="dtable-wrap">
@@ -191,7 +223,7 @@
                   <th class="c-kind">Event</th>
                   <th class="c-layer">Decided by</th>
                   <th class="c-risk">Risk</th>
-                  <th class="c-amt">Amount</th>
+                  <th class="c-amt">Money</th>
                   <th class="c-verdict">Verdict</th>
                   <th class="c-go" aria-label="open"></th>
                 </tr>
@@ -199,6 +231,15 @@
               <tbody id="decisions"></tbody>
             </table>
           </div>
+        </div>
+
+        <!-- Per-job ledger -->
+        <div class="panel" id="jobs-section">
+          <div class="panel-head">
+            <h3>Per-job ledger</h3>
+            <span class="panel-meta">Revenue in · cost out · margin kept</span>
+          </div>
+          <div class="jobs" id="jobs"></div>
         </div>
       </section>
 
@@ -223,11 +264,11 @@
       </svg>
       <h2>Arb<span>iter</span></h2>
       <ul>
-        <li>Earns through <b class="s-stripe">Stripe</b>.</li>
-        <li>Runs payment ops.</li>
-        <li>Blocks fraud.</li>
-        <li>Asks the owner when judgment is ambiguous.</li>
-        <li>Improves itself, without losing control.</li>
+        <li>Earns from client invoices through <b class="s-stripe">Stripe</b>.</li>
+        <li>Buys what each job needs to ship.</li>
+        <li>Refuses any spend that kills the margin.</li>
+        <li>Asks the owner when a spend is borderline.</li>
+        <li>Grows the balance, without losing control.</li>
       </ul>
       <p class="end-stat" id="end-stat"></p>
       <button id="end-card-close" class="btn btn-ghost">Replay ready · Close</button>

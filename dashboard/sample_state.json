@@ -1,172 +1,152 @@
 {
-  "earnings": 480.0,
-  "spend": 60.0,
-  "net": 420.0,
+  "seed": 50.0,
+  "goal": 500.0,
+  "balance": 695.0,
+  "earnings": 800.0,
+  "spend": 155.0,
+  "net": 645.0,
+  "margin": 645.0,
   "catch_rate": 0.83,
   "awaiting_approval": null,
   "timeline": [
     {
       "t": 1781992711.1215363,
-      "id": "01_invoice_normal_paid",
+      "id": "01_client_paid_northstar",
       "kind": "invoice_payment",
       "decision": "approve",
-      "reason": "Normal invoice payment reconciled \u2014 no policy red flags.",
+      "reason": "Stripe Checkout completed. Invoice INV-NS-118 verified and reconciled against the brand-video job \u2014 money in.",
       "refs": [
-        "invoice_normal_paid"
+        "invoice_verified"
       ],
       "risk": 0.05,
       "layer": "rules",
       "amount": 480.0,
       "currency": "GBP",
       "category": null,
-      "beat": "Earn: Northstar Studio pays a normal \u00a3480 invoice. Reconciled, no red flags."
+      "job": "Northstar \u2014 brand video",
+      "beat": "Client paid: Northstar Studio settles its \u00a3480 invoice. Verified and reconciled \u2014 money in."
     },
     {
       "t": 1781992711.1216471,
-      "id": "02_duplicate_invoice",
-      "kind": "vendor_payment",
-      "decision": "block",
-      "reason": "Duplicate payment fingerprint (vendor=vendor_acme, amount=320.0, ref=INV-2002) already seen.",
-      "refs": [
-        "duplicate_invoice"
-      ],
-      "risk": 0.9,
-      "layer": "rules",
-      "amount": 320.0,
-      "currency": "GBP",
-      "category": null,
-      "beat": "Block: same vendor + amount + ref already paid this cycle. Double-payment prevented."
-    },
-    {
-      "t": 1781992711.121706,
-      "id": "03_amount_mismatch",
-      "kind": "vendor_payment",
-      "decision": "block",
-      "reason": "Amount mismatch: invoice=480.0 GBP vs request=840.0 GBP.",
-      "refs": [
-        "amount_mismatch"
-      ],
-      "risk": 0.85,
-      "layer": "rules",
-      "amount": 840.0,
-      "currency": "GBP",
-      "category": null,
-      "beat": "Block: invoice says \u00a3480 but the payment request is \u00a3840. Overpayment caught."
-    },
-    {
-      "t": 1781992711.1219358,
-      "id": "04_vendor_bank_change_known_vendor",
-      "kind": "vendor_detail_change",
-      "decision": "approve",
-      "reason": "[owner decision] Weak evidence for a known-vendor bank change \u2014 owner must confirm out-of-band.",
-      "refs": [
-        "vendor_detail_change_known_vendor",
-        "llm_refine",
-        "phone_escalation"
-      ],
-      "risk": 0.6,
-      "layer": "escalate",
-      "amount": null,
-      "currency": "GBP",
-      "category": null,
-      "beat": "Escalate: long-standing vendor asks to change bank details with weak evidence. Owner's phone buzzes."
-    },
-    {
-      "t": 1781992711.1220174,
-      "id": "05_vendor_bank_change_new_vendor",
-      "kind": "vendor_detail_change",
-      "decision": "block",
-      "reason": "New vendor requesting payment-detail change with no payment history \u2014 likely supplier impersonation.",
-      "refs": [
-        "vendor_detail_change_new_vendor"
-      ],
-      "risk": 0.88,
-      "layer": "rules",
-      "amount": null,
-      "currency": "GBP",
-      "category": null,
-      "beat": "Block: a vendor we've never paid wants to change payment details immediately \u2014 classic supplier impersonation."
-    },
-    {
-      "t": 1781992711.1220765,
-      "id": "06_instruction_override",
-      "kind": "vendor_payment",
-      "decision": "block",
-      "reason": "Instruction-override attempt detected: phrase 'ignore policy' asks the agent to bypass policy.",
-      "refs": [
-        "instruction_override"
-      ],
-      "risk": 0.95,
-      "layer": "rules",
-      "amount": 1500.0,
-      "currency": "GBP",
-      "category": null,
-      "beat": "Block: message tries to talk the agent into bypassing its own checks. Refused."
-    },
-    {
-      "t": 1781992711.122174,
-      "id": "07_new_vendor_small_amount",
-      "kind": "vendor_payment",
-      "decision": "approve",
-      "reason": "New vendor but small amount and service description matches an expected SaaS subscription.",
-      "refs": [
-        "new_vendor_small_amount",
-        "llm_refine"
-      ],
-      "risk": 0.2,
-      "layer": "llm",
-      "amount": 35.0,
-      "currency": "GBP",
-      "category": null,
-      "beat": "Escalate: new vendor, small amount \u2014 ambiguous. Bounded LLM weighs it; if unsure, owner is pinged."
-    },
-    {
-      "t": 1781992711.1222432,
-      "id": "08_over_budget_tool_purchase",
-      "kind": "self_spend",
-      "decision": "block",
-      "reason": "Self-spend 150.0 exceeds remaining budget 100.0. The agent blocks its own over-budget purchase.",
-      "refs": [
-        "self_spend_over_budget"
-      ],
-      "risk": 0.7,
-      "layer": "rules",
-      "amount": 150.0,
-      "currency": "GBP",
-      "category": "fraud_detection",
-      "beat": "Self-block: agent tries to buy a premium fraud scanner that blows its remaining budget. Its own policy refuses."
-    },
-    {
-      "t": 1781992711.1223028,
-      "id": "09_off_goal_marketing_tool",
-      "kind": "self_spend",
-      "decision": "block",
-      "reason": "Self-spend category 'marketing_automation' is not in the allowed set ['bank_reconciliation', 'fraud_detection', 'ocr']. Off-goal spend blocked by the agent's own policy.",
-      "refs": [
-        "self_spend_off_goal"
-      ],
-      "risk": 0.75,
-      "layer": "rules",
-      "amount": 40.0,
-      "currency": "GBP",
-      "category": "marketing_automation",
-      "beat": "Self-block: agent tries to buy marketing automation. Off-goal \u2014 not a fraud/ops capability. Blocked by its own policy."
-    },
-    {
-      "t": 1781992711.122344,
-      "id": "10_approved_fraud_tool",
+      "id": "02_buy_stock_footage",
       "kind": "self_spend",
       "decision": "approve",
-      "reason": "Self-spend on allowed capability 'fraud_detection' (60.0) within budget (100.0 remaining). Autonomous reinvest approved.",
+      "reason": "Spend \u00a360 for stock footage to deliver the \u00a3480 job. Within the job's budget \u2014 margin stays healthy.",
       "refs": [
-        "self_spend_allowed"
+        "spend_within_budget"
       ],
       "risk": 0.1,
       "layer": "rules",
       "amount": 60.0,
       "currency": "GBP",
+      "category": "stock_footage",
+      "job": "Northstar \u2014 brand video",
+      "beat": "Buy to deliver: licenses \u00a360 of stock footage for the edit. Inside the job's budget."
+    },
+    {
+      "t": 1781992711.121706,
+      "id": "03_buy_render_credits",
+      "kind": "self_spend",
+      "decision": "approve",
+      "reason": "Spend \u00a345 on cloud render credits to export the final cut. Running cost \u00a3105 of \u00a3480 \u2014 margin protected.",
+      "refs": [
+        "spend_within_budget"
+      ],
+      "risk": 0.12,
+      "layer": "rules",
+      "amount": 45.0,
+      "currency": "GBP",
+      "category": "render_credits",
+      "job": "Northstar \u2014 brand video",
+      "beat": "Buy to deliver: \u00a345 of cloud render credits to export the final cut. Margin protected."
+    },
+    {
+      "t": 1781992711.1219358,
+      "id": "04_refuse_premium_plugin",
+      "kind": "self_spend",
+      "decision": "block",
+      "reason": "Spend \u00a3520 for a 'pro suite' upgrade exceeds the entire \u00a3480 job revenue. Approving it would make the job unprofitable, so the agent refuses.",
+      "refs": [
+        "spend_kills_margin"
+      ],
+      "risk": 0.8,
+      "layer": "rules",
+      "amount": 520.0,
+      "currency": "GBP",
+      "category": "premium_tooling",
+      "job": "Northstar \u2014 brand video",
+      "margin_killer": true,
+      "beat": "Refused: a \u00a3520 'pro suite' upgrade costs more than the entire \u00a3480 job \u2014 it would make the job unprofitable. Blocked."
+    },
+    {
+      "t": 1781992711.1220174,
+      "id": "05_client_paid_lumen",
+      "kind": "invoice_payment",
+      "decision": "approve",
+      "reason": "Stripe Checkout completed. Invoice INV-LU-204 verified against the landing-page job \u2014 money in.",
+      "refs": [
+        "invoice_verified"
+      ],
+      "risk": 0.06,
+      "layer": "rules",
+      "amount": 320.0,
+      "currency": "GBP",
+      "category": null,
+      "job": "Lumen \u2014 landing page",
+      "beat": "Client paid: Lumen Co pays \u00a3320 for the landing-page build. Verified \u2014 money in."
+    },
+    {
+      "t": 1781992711.1220765,
+      "id": "06_buy_hosting",
+      "kind": "self_spend",
+      "decision": "approve",
+      "reason": "Spend \u00a330 on hosting and a domain to ship the page. Within the \u00a3320 job's budget.",
+      "refs": [
+        "spend_within_budget"
+      ],
+      "risk": 0.1,
+      "layer": "rules",
+      "amount": 30.0,
+      "currency": "GBP",
+      "category": "hosting",
+      "job": "Lumen \u2014 landing page",
+      "beat": "Buy to deliver: \u00a330 of hosting + a domain to ship the page live."
+    },
+    {
+      "t": 1781992711.122174,
+      "id": "07_contractor_addon",
+      "kind": "self_spend",
+      "decision": "block",
+      "reason": "[owner decision] A \u00a3180 contractor add-on leaves only a thin margin on the \u00a3320 job. Not clearly worth it \u2014 owner denied it from their phone to protect the margin.",
+      "refs": [
+        "thin_margin",
+        "phone_escalation"
+      ],
+      "risk": 0.55,
+      "layer": "escalate",
+      "amount": 180.0,
+      "currency": "GBP",
+      "category": "contractor",
+      "job": "Lumen \u2014 landing page",
+      "beat": "Margin check: a \u00a3180 contractor add-on leaves a thin margin on a \u00a3320 job. Arbiter escalates to the owner \u2014 who denies it."
+    },
+    {
+      "t": 1781992711.1223028,
+      "id": "08_reinvest_fraud_tool",
+      "kind": "self_spend",
+      "decision": "approve",
+      "reason": "Self-spend \u00a320 on an allowed 'fraud_detection' capability, within remaining budget. On-goal autonomous reinvest approved.",
+      "refs": [
+        "spend_allowed",
+        "spend_within_budget"
+      ],
+      "risk": 0.1,
+      "layer": "rules",
+      "amount": 20.0,
+      "currency": "GBP",
       "category": "fraud_detection",
-      "beat": "Reinvest: earnings threshold crossed \u2014 agent buys a fraud-detection capability within budget. Autonomous reinvest approved."
+      "job": "Operations",
+      "beat": "Reinvest: with margin banked, Arbiter buys a \u00a320 fraud-screening capability. On-goal, within budget."
     }
   ]
 }
