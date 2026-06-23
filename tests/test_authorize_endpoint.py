@@ -103,3 +103,35 @@ def test_authorize_decisions_land_in_shared_ledger(client):
     assert len(timeline) == 1
     assert timeline[0]["id"] == "led-1"
     assert timeline[0]["decision"] == "approve"
+
+
+def test_authorize_blocks_unapproved_payee(client):
+    """The Hermes seam carries the allowlist: an off-list payee is blocked.
+
+    This is the governance a Hermes agent inherits the moment it's handed
+    Arbiter — it physically cannot pay a supplier the owner never approved,
+    even though the agent itself drove the request.
+    """
+    resp = client.post("/authorize", json={
+        "kind": "vendor_payment", "vendor_id": "meta_ads", "amount": 300.0,
+        "invoice_amount": 300.0, "vendor_known": True, "ref": "agent-meta-1",
+    })
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["decision"] == "block"
+    assert "payee_not_approved" in body["policy_refs"]
+    assert body["decided_by"] == "rules"
+
+
+def test_authorize_approves_allowlisted_supplier(client):
+    """An approved, established supplier paid the reconciled amount: the agent
+    is cleared to pay — autopilot, no human needed."""
+    resp = client.post("/authorize", json={
+        "kind": "vendor_payment", "vendor_id": "aws", "amount": 220.0,
+        "invoice_amount": 220.0, "vendor_known": True, "vendor_history_count": 11,
+        "ref": "agent-aws-1",
+    })
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["decision"] == "approve"
+    assert "approved_supplier_payment" in body["policy_refs"]

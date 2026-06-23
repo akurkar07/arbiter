@@ -1,0 +1,22 @@
+# Hermes Agent MCP registration for Arbiter.
+#
+# Merge this under the `mcp_servers:` key of ~/.hermes/config.yaml, then restart
+# Hermes. It will spawn `python -m arbiter.mcp_server` over stdio, discover the
+# three governance tools, and register them as mcp_arbiter_* in every chat.
+#
+# Prereq: the Arbiter governance server must be running so the tools have an
+# engine + shared ledger to talk to:
+#     uvicorn arbiter.web.server:app --host 127.0.0.1 --port 8000
+#
+# Run `python -m arbiter.mcp_server` from a working tree where `arbiter` is
+# importable (the repo root with the venv active), or set the command to the
+# venv's python explicitly.
+
+mcp_servers:
+  arbiter:
+    command: "python"
+    args: ["-m", "arbiter.mcp_server"]
+    env:
+      ARBITER_BASE_URL: "http://127.0.0.1:8000"
+    timeout: 300          # escalations block on a human owner; allow read time
+    connect_timeout: 30

@@ -6,9 +6,26 @@ be handed a Stripe key and *cannot* move money without every payment passing
 through Arbiter's three layers: deterministic rules -> bounded NVIDIA Nemotron
 -> human approval gate.
 
-Wire it into Hermes with::
+Wire it into Hermes either way:
 
-    hermes mcp add arbiter --command "python" --args -m arbiter.mcp_server
+Quickest — the Hermes CLI writes the config for you::
+
+    hermes mcp add arbiter --command python --args -m arbiter.mcp_server
+
+Or add it by hand to ``mcp_servers`` in ~/.hermes/config.yaml::
+
+    mcp_servers:
+      arbiter:
+        command: "python"
+        args: ["-m", "arbiter.mcp_server"]
+        env:
+          ARBITER_BASE_URL: "http://127.0.0.1:8000"
+        timeout: 300
+
+Either way Hermes discovers the tools at startup and registers them as
+``mcp_arbiter_*``. A ready-to-merge fragment lives at
+``integration/hermes_mcp_servers.yaml``; the full story is in
+``HERMES_INTEGRATION.md``.
 
 Architecture note — why this proxies to the web server instead of running the
 engine in-process: the demo dashboard and this MCP server are separate

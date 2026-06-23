@@ -14,11 +14,15 @@ dependencies = []
 
 [project.optional-dependencies]
 dev = ["pytest>=7", "pytest-cov>=4"]
-stripe = ["stripe>=8"]
+# v2 money-management OutboundPayments (pay_supplier) needs a recent SDK.
+stripe = ["stripe>=11"]
 # The bounded reasoning layer talks to NVIDIA NIM over the OpenAI-compatible API.
 # Optional so the offline demo (MockNemotron) still installs with zero deps.
 llm = ["openai>=1.30"]
 web = ["fastapi>=0.110", "uvicorn>=0.29"]
+# The Hermes-native governance edge: registers Arbiter as an MCP server so a
+# Hermes agent's payments flow through the engine. See HERMES_INTEGRATION.md.
+mcp = ["mcp>=1.2", "httpx>=0.27"]
 
 [project.scripts]
 arbiter-demo = "arbiter.cli:main"
