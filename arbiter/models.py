@@ -83,10 +83,19 @@ class PolicyContext:
     spend_cap: float = 100.0
     budget_remaining: float = 100.0
     allowed_categories: set[str] = field(default_factory=lambda: {"fraud_detection", "ocr", "bank_reconciliation"})
+    # Owner-approved supplier allowlist: the agent may only pay vendors whose id
+    # is in this set. None = allowlist not configured (control inert, other rules
+    # still apply). A configured set is enforced strictly — an empty set approves
+    # no payee (fail closed). This is the foundational "can't pay anyone you
+    # didn't approve" guarantee.
+    approved_payees: Optional[set[str]] = None
     # recent payment fingerprints for duplicate detection: (vendor_id, amount, ref)
     recent_payment_fingerprints: set[tuple[str, float, str]] = field(default_factory=set)
     # duplicate window: treat a ref as duplicate if seen within this many prior events
     duplicate_lookback: int = 50
+    # --- tunable rule thresholds (policy-as-config) ---
+    new_vendor_auto_threshold: float = 50.0
+    detail_change_evidence_threshold: float = 0.8
 
 
 @dataclass(frozen=True)
@@ -98,6 +107,100 @@ class PolicyResult:
     policy_refs: list[str] = field(default_factory=list)
     risk_score: float = 0.0
     decided_by: DecisionLayer = DecisionLayer.RULES
+
+
+@dataclass(frozen=True)
+class SettlementResult:
+    """The result of asking Arbiter to *settle* a payment: decide AND execute.
+
+    This is what the single money door returns. It carries the full governance
+    decision plus the rail receipt, fused into one object so a caller can never
+    hold a decision without also holding the truth of whether money moved.
+
+    ``executed`` is True only when the decision was APPROVE *and* the payment
+    actually reached the Stripe rail. ``stripe_id`` is the real settlement
+    handle (``obp_test_...`` outbound payment, ``cs_...`` checkout) when the live
+    rail produced one; it stays None on the recording stub and on every
+    block/escalate — so a None stripe_id is proof no money moved on this call.
+    """
+
+    decision: DecisionKind
+    reason: str
+    policy_refs: list[str] = field(default_factory=list)
+    risk_score: float = 0.0
+    decided_by: DecisionLayer = DecisionLayer.RULES
+    executed: bool = False
+    stripe_id: Optional[str] = None
+    stripe_backend: str = "stub"
+    event_id: str = ""
+
+    @property
+    def moved_money(self) -> bool:
+        """True iff this settlement actually moved money on the rail."""
+        return self.executed and self.decision == DecisionKind.APPROVE
+
+    def as_policy_result(self) -> "PolicyResult":
+        """The governance verdict alone, for callers typed on PolicyResult
+        (e.g. the operator's refusal hook). Drops the rail receipt."""
+        return PolicyResult(
+            decision=self.decision,
+            reason=self.reason,
+            policy_refs=list(self.policy_refs),
+            risk_score=self.risk_score,
+            decided_by=self.decided_by,
+        )
+
+
+@dataclass(frozen=True)
+class SpendContext:
+    """Per-job context for judging a delivery spend against its paid invoice.
+
+    The business operator builds this the moment the agent decides whether to
+    buy a tool to deliver a job it has already been paid for. It carries exactly
+    what the reasoning layer needs to judge *on-goal + margin-safe*, and the same
+    numbers the deterministic ``_self_spend_over_budget`` / ``_self_spend_off_goal``
+    rules read — so the LLM's narrative and the rule that actually enforces the
+    refusal can never disagree about the facts, only (revealingly) about the call.
+
+    ``budget_remaining`` is the operator's margin-protected headroom for this job:
+    ``revenue - protected_margin - already_spent``. Feeding it into the existing
+    over-budget rule is what turns "don't spend past budget" into "don't spend
+    past the point that kills the margin" with no change to the rules engine.
+    """
+
+    job_id: str
+    job_title: str
+    revenue: float
+    protected_margin: float
+    budget_remaining: float
+    tool_name: str
+    tool_category: str
+    cost: float
+    allowed_categories: tuple[str, ...]
+    tool_rationale: str = ""
+    currency: str = "GBP"
+
+    @property
+    def margin_if_bought(self) -> float:
+        """The profit that would survive on this job if this spend is approved."""
+        return self.revenue - self.cost
+
+    def as_facts(self) -> dict:
+        """Compact fact dict for the reasoning prompt + the dashboard card."""
+        return {
+            "job_id": self.job_id,
+            "job_title": self.job_title,
+            "revenue": self.revenue,
+            "protected_margin": self.protected_margin,
+            "margin_safe_budget_remaining": self.budget_remaining,
+            "tool_name": self.tool_name,
+            "tool_category": self.tool_category,
+            "tool_cost": self.cost,
+            "margin_if_bought": self.margin_if_bought,
+            "allowed_categories": list(self.allowed_categories),
+            "tool_rationale": self.tool_rationale or None,
+            "currency": self.currency,
+        }
 
 
 # Phrases that signal an instruction-override / social-engineering attempt.

@@ -35,15 +35,87 @@ class NemotronLayer(Protocol):
     def judge(self, event: AgentEvent, policy_hint: PolicyResult) -> NemotronResult: ...
 
 
+def _strip_reasoning(raw: str) -> str:
+    """Remove ``<think>...</think>`` reasoning blocks a reasoning model may emit.
+
+    Nemotron reasoning variants (and several NIM models with thinking enabled)
+    prepend a ``<think>`` block before the answer. That block can itself contain
+    brace characters, which would otherwise capture the naive ``{...}`` span and
+    corrupt the parse. Strip complete think blocks, and as a fallback drop a
+    dangling unterminated one, before we look for the JSON object.
+    """
+    cleaned = re.sub(r"<think>.*?</think>", "", raw, flags=re.S | re.I)
+    # An unterminated <think> (model hit the token cap mid-reasoning): drop from
+    # the tag to the first '{' that starts the actual JSON answer, if any.
+    if "<think>" in cleaned.lower():
+        lowered = cleaned.lower()
+        tag = lowered.index("<think>")
+        brace = cleaned.find("{", tag)
+        cleaned = cleaned[brace:] if brace != -1 else cleaned[:tag]
+    return cleaned
+
+
 def _parse_strict_json(raw: str) -> Optional[dict]:
-    """Extract the first JSON object from raw text. None if malformed."""
-    match = re.search(r"\{.*\}", raw, re.S)
-    if not match:
+    """Extract the first JSON object from raw text. None if malformed.
+
+    Robust to the two shapes a real Nemotron returns around the strict object:
+    a ``<think>`` reasoning preamble and ```` ```json ```` code fences. We strip
+    reasoning first, then scan for the first brace-balanced object rather than a
+    greedy ``{.*}`` span, so braces inside any surviving prose can't swallow the
+    real payload. Anything that still doesn't parse returns None, which the
+    caller turns into a safe re-escalate — a malformed model response can never
+    become an approval.
+    """
+    text = _strip_reasoning(raw)
+    # Fast path: a clean or fenced object parses directly once fences are gone.
+    fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.S | re.I)
+    if fenced:
+        try:
+            return json.loads(fenced.group(1))
+        except json.JSONDecodeError:
+            pass
+    # General path: find the first brace-balanced {...} and parse it.
+    candidate = _first_balanced_object(text)
+    if candidate is None:
         return None
     try:
-        return json.loads(match.group(0))
+        return json.loads(candidate)
     except json.JSONDecodeError:
         return None
+
+
+def _first_balanced_object(text: str) -> Optional[str]:
+    """Return the first brace-balanced ``{...}`` substring, or None.
+
+    Tracks string literals and escapes so a ``}`` inside a JSON string value
+    doesn't end the object early. This is what lets a reason string containing a
+    brace or quote survive the extraction.
+    """
+    start = text.find("{")
+    if start == -1:
+        return None
+    depth = 0
+    in_string = False
+    escaped = False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : i + 1]
+    return None
 
 
 def _coerce(raw: str, fallback: PolicyResult) -> NemotronResult:

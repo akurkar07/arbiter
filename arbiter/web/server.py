@@ -27,11 +27,14 @@ from pydantic import BaseModel
 
 from ..agent import ArbiterAgent
 from ..agent.nim_nemotron import select_nemotron
+from ..agent.spend_judge import select_spend_judge
+from ..business_day import business_day_events
 from ..ledger import EventLedger
-from ..models import AgentEvent, EventKind, PolicyContext, DecisionKind
-from ..reinvest import fraud_catch_rate
-from ..scenarios import list_scenarios, load_scenario
-from ..stripe_glue import StripeGlue
+from ..models import AgentEvent, EventKind, DecisionKind
+from ..metrics import reinvest_improvement
+from ..operator import BusinessOperator, demo_jobs
+from ..policy.config import demo_policy_context
+from ..stripe_glue import select_stripe
 
 DASHBOARD_DIR = Path(__file__).resolve().parent.parent.parent / "dashboard"
 
@@ -87,39 +90,59 @@ class DemoState:
         self.reset()
 
     def reset(self) -> None:
-        self.ctx = PolicyContext()
+        self.ctx = demo_policy_context()  # the 3-supplier allowlist governs the demo
         self.ledger = EventLedger()
         self.escalation = WebEscalation()
+        # The agent is the sole holder of the Stripe rail. select_stripe() gives
+        # the real test-mode rail when STRIPE_SECRET_KEY is set, else the stub.
+        # No other object gets its own handle — every payment goes through
+        # agent.settle(), so nothing can pay around the engine.
         self.agent = ArbiterAgent(
             ctx=self.ctx,
             ledger=self.ledger,
             nemotron=select_nemotron(),
             escalation=self.escalation,
+            stripe=select_stripe(),
         )
-        self.stripe = StripeGlue()
         self.running = False
         self.done = False
         self.thread: threading.Thread | None = None
+        # The autonomous business-operator runs on the SAME agent + ledger, so its
+        # earn/verify/spend/refuse decisions stream onto the same timeline the
+        # dashboard already polls. None until a run starts. ``operator_mode`` tells
+        # the dashboard which story is playing so it can pick the right headline.
+        self.operator: BusinessOperator | None = None
+        self.operator_mode = False
+        self.spend_judge = select_spend_judge()
+
+    @property
+    def stripe(self):
+        """The single Stripe handle, owned by the agent. Read-only alias so the
+        /state snapshot and inbound-earn path share the agent's one rail."""
+        return self.agent.stripe
 
     def _run(self, step_delay: float) -> None:
-        for name in list_scenarios():
-            event, _expected, raw = load_scenario(name)
-            beat = raw.get("demo_beat", name)
+        """Play the AP-autopilot business day on the shared agent + ledger.
 
+        The coherent story the dashboard streams: revenue in, pay the approved
+        suppliers, block the double-pay / overpay / unapproved stranger, and park
+        the weak-evidence bank change on a real owner tap. Every beat goes through
+        agent.settle() — the single money door — so only an APPROVED decision
+        reaches the Stripe rail, and it reaches it the same way every front door
+        does (no separate pay path to drift out of sync).
+        """
+        for event_id, beat, event, seeds in business_day_events():
             # Seed any pre-demo payment fingerprints (for duplicate detection).
-            for fp in raw.get("seed_fingerprints", []):
+            for fp in seeds:
                 self.ctx.recent_payment_fingerprints.add((fp[0], fp[1], fp[2]))
 
-            # Earn beat: a customer paying an invoice arrives via a Stripe webhook.
-            if event.kind == EventKind.INVOICE_PAYMENT:
-                self.stripe.create_checkout(event.ref or "n/a", event.amount or 0, event.currency)
-                self.stripe.webhook_received("checkout.session.completed", event.ref)
-
             # Tell the escalation handler which event it's about to be asked about.
-            self.escalation.current_id = name
+            self.escalation.current_id = event_id
             self.escalation.current_beat = beat
 
-            self.agent.decide(event, event_id=name, demo_beat=beat)
+            # settle = decide + (on approve) execute on the rail. A blocked or
+            # escalated decision returns executed=False and never touches Stripe.
+            self.agent.settle(event, event_id=event_id, demo_beat=beat)
             time.sleep(step_delay)
 
         self.done = True
@@ -131,21 +154,97 @@ class DemoState:
                 return
             self.running = True
             self.done = False
+            self.operator_mode = False
             self.thread = threading.Thread(target=self._run, args=(step_delay,), daemon=True)
             self.thread.start()
 
+    def _run_operator(self, step_delay: float) -> None:
+        """Play the business-operator timeline on the shared agent + ledger.
+
+        Each refused spend is surfaced to the owner through the same web
+        escalation gate the scenario demo uses: the worker thread parks on a real
+        approve/deny tap before moving on. The refusal itself is final (the agent
+        protected its own margin); the tap is the owner acknowledging it — the
+        human-in-the-loop beat the judges watch.
+        """
+        op = self.operator
+        assert op is not None
+
+        def on_refused(spend_ctx, result) -> None:
+            # Publish a pending card naming the refused spend, then block on the gate.
+            self.escalation.current_id = f"{spend_ctx.job_id}:refused:{spend_ctx.tool_name}"
+            self.escalation.current_beat = (
+                f"Refused: {spend_ctx.tool_name} (£{spend_ctx.cost:.0f}) on '{spend_ctx.job_title}'"
+            )
+            # request_approval blocks until /approve or /deny; the returned decision
+            # doesn't un-refuse the spend, it just records that the owner saw it.
+            self.escalation.request_approval(
+                AgentEvent(kind=EventKind.SELF_SPEND, amount=spend_ctx.cost,
+                           category=spend_ctx.tool_category, message=result.reason),
+                result,
+            )
+
+        for job in demo_jobs():
+            op.run_job(job, on_spend_refused=on_refused)
+            time.sleep(step_delay)
+
+        self.done = True
+        self.running = False
+
+    def start_operator(self, step_delay: float = 1.2) -> None:
+        with self.lock:
+            if self.running:
+                return
+            self.running = True
+            self.done = False
+            self.operator_mode = True
+            self.operator = BusinessOperator(
+                agent=self.agent,
+                stripe=self.stripe,
+                spend_judge=self.spend_judge,
+                starting_balance=50.0,
+            )
+            self.thread = threading.Thread(target=self._run_operator, args=(step_delay,), daemon=True)
+            self.thread.start()
+
     def snapshot(self) -> dict:
-        # capability is acquired once an approved fraud-detection self-spend lands,
-        # which is the reinvest beat — so the catch-rate ticks up live and honestly.
+        # The capability is acquired once an approved fraud-detection self-spend
+        # lands (the reinvest beat), so the autonomy figure ticks up live and
+        # honestly. Both numbers are MEASURED by re-running the real agent over
+        # the fraud scenario set — see arbiter.metrics — never hardcoded.
         has_capability = self.ledger.spend > 0
+        governance = reinvest_improvement()
+        current = governance["after"] if has_capability else governance["before"]
         return {
             "running": self.running,
             "done": self.done,
             "earnings": round(self.ledger.earnings, 2),
             "spend": round(self.ledger.spend, 2),
             "net": round(self.ledger.net, 2),
-            "catch_rate": fraud_catch_rate(has_capability),
+            # Headline meter the dashboard already binds to: the live autonomous-
+            # resolution rate (fraud resolved without a human tap). Moves 0.8->1.0
+            # the moment the agent reinvests in bank-reconciliation.
+            "catch_rate": current["autonomous_rate"],
+            # Full honest before/after so the dashboard can show the delta as a
+            # real measured number rather than an assertion.
+            "governance": governance,
+            "has_capability": has_capability,
             "awaiting_approval": self.escalation.pending,
+            # When the business-operator is the active story, expose its per-job
+            # ledger + rollup so the dashboard can show "watch the business run":
+            # balance, revenue, cost, waste blocked, every margin protected.
+            "operator_mode": self.operator_mode,
+            "business": self.operator.rollup.as_dict() if self.operator is not None else None,
+            # The owner's approved-supplier allowlist + which Stripe backend is
+            # live, so the dashboard can show "Owner approved: ..." and whether
+            # supplier payments are real test-mode obp_... or recorded stubs.
+            "approved_payees": sorted(self.ctx.approved_payees) if self.ctx.approved_payees else [],
+            "stripe_backend": getattr(self.stripe, "backend", "stub"),
+            "supplier_payments": [
+                {"payee": c.payee, "amount": c.amount, "currency": c.currency,
+                 "stripe_id": c.stripe_id, "ref": c.ref}
+                for c in self.stripe.calls if c.op == "pay_supplier"
+            ],
             # insertion order matches dashboard/sample_state.json; the UI reverses
             # for display so the contract fixture and the live feed are identical.
             "timeline": self.ledger.as_timeline(),
@@ -170,6 +269,18 @@ def get_state() -> JSONResponse:
 def run() -> dict:
     state.start()
     return {"running": True}
+
+
+@app.post("/run_operator")
+def run_operator() -> dict:
+    """Start the autonomous business-operator timeline (the swing demo).
+
+    Plays paid jobs through earn -> verify -> margin-protected spend on the same
+    shared ledger /state exposes, so the dashboard streams the operator's
+    decisions and per-job business rollup live.
+    """
+    state.start_operator()
+    return {"running": True, "operator_mode": True}
 
 
 @app.post("/reset")
@@ -272,7 +383,11 @@ def authorize(req: AuthorizeRequest) -> JSONResponse:
     # demo runner does — so a parked card names the right request.
     state.escalation.current_id = event_id
     state.escalation.current_beat = beat
-    result = state.agent.decide(event, event_id=event_id, demo_beat=beat)
+    # settle(), not decide(): the agent decides AND, on approve, executes on the
+    # rail it alone holds. The caller gets the rail receipt, never a chance to
+    # pay around the engine. A block/escalate returns executed=False, stripe_id
+    # None — proof no money moved.
+    result = state.agent.settle(event, event_id=event_id, demo_beat=beat)
 
     return JSONResponse(
         {
@@ -282,6 +397,10 @@ def authorize(req: AuthorizeRequest) -> JSONResponse:
             "policy_refs": result.policy_refs,
             "decided_by": result.decided_by.value,
             "event_id": event_id,
+            # The settlement truth: did money move, and the rail handle if so.
+            "executed": result.executed,
+            "stripe_id": result.stripe_id,
+            "stripe_backend": result.stripe_backend,
         }
     )
 

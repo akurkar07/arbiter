@@ -1,0 +1,56 @@
+flowchart TB
+    subgraph hermes["Nous / Hermes layer"]
+        HA["Hermes agent\n(holds NO Stripe key)"]
+    end
+
+    subgraph arbiter["Arbiter — Hermes-native MCP server"]
+        MCP["MCP tools\nauthorize_payment / list_rules / get_ledger"]
+        SETTLE["settle()  — the single money door\ndecide AND execute, fused"]
+
+        subgraph gov["3-layer governance"]
+            R["1. Deterministic rules\nallowlist / dup / overpay / budget"]
+            N["2. NVIDIA Nemotron\nbounded: refine escalations only"]
+            H["3. Human approval gate\nweb /approve  ·  phone tap"]
+        end
+
+        LEDGER["Event ledger\n+ reconciliation vs Stripe balance"]
+    end
+
+    subgraph nvidia["NVIDIA layer"]
+        NIM["NIM  integrate.api.nvidia.com\nNemotron model"]
+        ORF["fallback: OpenRouter free Nemotron"]
+    end
+
+    subgraph stripe["Stripe layer (test-mode, REAL)"]
+        CONNECT["Connect account per supplier\n(KYC-gated onboarding)"]
+        TRANSFER["Transfer  tr_...\nreal money to supplier"]
+        INVOICE["Invoice in_...  / Checkout cs_...\nrevenue in"]
+    end
+
+    subgraph ingest["Invoice ingestion (new)"]
+        PDF["PDF / image invoice"]
+        OCR["LLM vision extract\nvendor · amount · due · line items"]
+    end
+
+    HA -->|"only door to money"| MCP
+    MCP --> SETTLE
+    SETTLE --> R
+    R -->|"escalate"| N
+    N --> NIM
+    N -.->|"key 403 / fallback"| ORF
+    N -->|"still unsure"| H
+    R -->|"approve"| TRANSFER
+    SETTLE -->|"on approve only"| TRANSFER
+    TRANSFER --> CONNECT
+    INVOICE --> SETTLE
+    PDF --> OCR --> SETTLE
+    SETTLE --> LEDGER
+    TRANSFER -.->|"reconcile"| LEDGER
+    INVOICE -.->|"reconcile"| LEDGER
+
+    classDef real fill:#0b3d2e,stroke:#19c37d,color:#d6ffe9
+    classDef blocked fill:#3d1111,stroke:#ff6b6b,color:#ffd6d6
+    classDef new fill:#1a2b4a,stroke:#4a9eff,color:#d6e8ff
+    class CONNECT,TRANSFER,INVOICE,NIM real
+    class ORF blocked
+    class PDF,OCR,ingest new

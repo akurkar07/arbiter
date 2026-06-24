@@ -6,9 +6,26 @@ be handed a Stripe key and *cannot* move money without every payment passing
 through Arbiter's three layers: deterministic rules -> bounded NVIDIA Nemotron
 -> human approval gate.
 
-Wire it into Hermes with::
+Wire it into Hermes either way:
 
-    hermes mcp add arbiter --command "python" --args -m arbiter.mcp_server
+Quickest — the Hermes CLI writes the config for you::
+
+    hermes mcp add arbiter --command python --args -m arbiter.mcp_server
+
+Or add it by hand to ``mcp_servers`` in ~/.hermes/config.yaml::
+
+    mcp_servers:
+      arbiter:
+        command: "python"
+        args: ["-m", "arbiter.mcp_server"]
+        env:
+          ARBITER_BASE_URL: "http://127.0.0.1:8000"
+        timeout: 300
+
+Either way Hermes discovers the tools at startup and registers them as
+``mcp_arbiter_*``. A ready-to-merge fragment lives at
+``integration/hermes_mcp_servers.yaml``; the full story is in
+``HERMES_INTEGRATION.md``.
 
 Architecture note — why this proxies to the web server instead of running the
 engine in-process: the demo dashboard and this MCP server are separate
@@ -49,21 +66,29 @@ def authorize_payment(
     message: str = "",
     category: str | None = None,
 ) -> dict:
-    """Ask Arbiter to authorize a payment before you make it.
+    """Pay a supplier through Arbiter. This IS the payment — not a permission slip.
 
-    Call this BEFORE moving any money. Arbiter runs the request through its
-    governance pipeline and returns a decision you must obey:
+    You (the agent) do NOT hold the money rail; Arbiter does. This single call is
+    the only way to move money: Arbiter runs the request through its governance
+    pipeline and, if and only if it approves, executes the payment itself and
+    returns the settlement receipt. There is no separate "now pay" step for you
+    to take — and no way to pay around this. The returned ``decision`` tells you
+    what happened:
 
-      - "approve": safe to proceed with the payment.
-      - "block":   do NOT proceed; the payment violates policy.
+      - "approve": Arbiter PAID the supplier. ``executed`` is true and
+        ``stripe_id`` is the settlement handle (obp_test_... on the live rail).
+      - "block":   nothing was paid. The payment violated policy; ``executed`` is
+        false and no money moved. Do not try to route around it — there is no
+        other door.
       - "escalate" resolves to approve/block AFTER a human owner decides — this
-        call blocks until they tap approve or deny, so when it returns you have
-        a real human decision, not a guess.
+        call blocks until they tap approve or deny, then pays (or doesn't)
+        accordingly. When it returns you have a real human decision and the money
+        has already moved or been held, not a guess.
 
     Args:
         kind: one of "invoice_payment", "vendor_payment", "vendor_detail_change",
             "self_spend".
-        amount: the amount you want to pay.
+        amount: the amount to pay.
         currency: ISO currency code (default GBP).
         vendor_id: identifier of the payee.
         vendor_known: True if this is an established vendor.
@@ -76,7 +101,9 @@ def authorize_payment(
         category: spend category for self_spend (e.g. "fraud_detection").
 
     Returns:
-        A dict with decision, reason, risk_score, policy_refs, decided_by.
+        A dict with decision, reason, risk_score, policy_refs, decided_by, and
+        the settlement truth: ``executed`` (did money actually move), ``stripe_id``
+        (the rail handle when it did), and ``stripe_backend`` (real vs recorded).
     """
     payload = {
         "kind": kind,
@@ -105,6 +132,61 @@ def authorize_payment(
         return resp.json()
     resp.raise_for_status()
     return resp.json()
+
+
+@mcp.tool()
+def ingest_invoice(
+    path: str,
+    vendor_known: bool = False,
+    vendor_history_count: int = 0,
+) -> dict:
+    """Drop an invoice file (PDF/image) and get a GOVERNED payment decision.
+
+    This is the accounts-payable front door: instead of you transcribing an
+    invoice into fields, hand Arbiter the document and it reads the vendor,
+    amount, currency, and invoice reference itself (a vision model), then runs
+    the proposed payment through the exact same governance pipeline as every
+    other payment. Reading an invoice grants no new power — an extracted payment
+    to a vendor the owner did not approve is still BLOCKED, a mismatch still
+    blocks, a detail change still escalates. The document is a new input to
+    governance, never a way around it.
+
+    The extractor never invents a figure: if it cannot read a vendor and a
+    positive amount, it returns ``status: "unreadable"`` and creates NO payment
+    request, rather than guessing a total.
+
+    Args:
+        path: filesystem path to the invoice (.pdf/.png/.jpg/.jpeg/.webp). Read
+            on the machine running this MCP server.
+        vendor_known: True if your own records show this is an established vendor
+            (the document cannot vouch for itself).
+        vendor_history_count: number of prior payments you have made to this
+            vendor, from your records.
+
+    Returns:
+        A dict with ``extraction`` (what was read off the document, including the
+        ``backend`` that read it — real vision vs mock), and either ``status:
+        "decided"`` with the full governance ``decision`` (decision/reason/
+        risk_score/policy_refs/executed/stripe_id), or a ``status`` of
+        "unreadable" / "server_unreachable" / "rejected" explaining why no
+        decision was reached. No money can move except through an APPROVE
+        decision returned here, exactly as with a typed payment.
+    """
+    from .ingest import ingest_invoice as _ingest
+
+    try:
+        return _ingest(
+            path,
+            base_url=BASE_URL,
+            vendor_known=vendor_known,
+            vendor_history_count=vendor_history_count,
+        )
+    except FileNotFoundError:
+        return {
+            "error": f"invoice file not found: {path}",
+            "hint": "Pass a path to a .pdf/.png/.jpg invoice readable on the MCP server host.",
+            "status": "no_file",
+        }
 
 
 @mcp.tool()

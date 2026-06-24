@@ -69,7 +69,10 @@ class EventLedger:
         # bookkeeping for the earn / spend / reinvest loop
         if event.kind.value == "invoice_payment" and result.decision == DecisionKind.APPROVE:
             self._earnings += event.amount or 0.0
-        if event.kind.value == "self_spend" and result.decision == DecisionKind.APPROVE:
+        # Money out: both the agent's own self-spend AND an approved supplier
+        # payment (the AP-autopilot's actual job) count as spend. Only approved
+        # payments move money — blocks/escalations never touch the spend total.
+        if event.kind.value in ("self_spend", "vendor_payment") and result.decision == DecisionKind.APPROVE:
             self._spend += event.amount or 0.0
         return entry
 

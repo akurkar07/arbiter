@@ -64,6 +64,42 @@ def _instruction_override(event: AgentEvent, ctx: PolicyContext) -> Optional[Pol
 
 
 @register_rule
+def _payee_not_approved(event: AgentEvent, ctx: PolicyContext) -> Optional[PolicyResult]:
+    """A vendor payment to a payee not on the owner's allowlist -> BLOCK.
+
+    The foundational control and the answer to "isn't it scary that it can pay
+    anyone?" — it can't. The agent may only ever pay suppliers the owner
+    explicitly approved. Checked before any approve path so even a clean,
+    correct-amount, non-duplicate payment to an unapproved payee is stopped
+    cold.
+
+    Allowlist semantics on ``ctx.approved_payees``:
+      * ``None`` -> not configured; control inert (every other rule still runs).
+      * a ``set`` -> enforced strictly; ``vendor_id`` must be a member or BLOCK.
+        An empty set therefore approves no payee at all (fail closed), and a
+        payment with no identifiable ``vendor_id`` cannot be verified -> BLOCK.
+    """
+    if event.kind != EventKind.VENDOR_PAYMENT:
+        return None
+    if ctx.approved_payees is None:
+        return None  # allowlist not configured -> control inert
+    if event.vendor_id is not None and event.vendor_id in ctx.approved_payees:
+        return None  # approved supplier -> defer to the normal rules below
+    payee = event.vendor_id if event.vendor_id is not None else "<unidentified>"
+    return PolicyResult(
+        decision=DecisionKind.BLOCK,
+        reason=(
+            f"Payee '{payee}' is not on the owner's approved supplier allowlist "
+            f"{sorted(ctx.approved_payees)}. The agent may only pay approved "
+            "suppliers — payment held before any money moved."
+        ),
+        policy_refs=["payee_not_approved"],
+        risk_score=0.8,
+        decided_by=DecisionLayer.RULES,
+    )
+
+
+@register_rule
 def _duplicate_invoice(event: AgentEvent, ctx: PolicyContext) -> Optional[PolicyResult]:
     """Same vendor + amount + ref seen recently -> BLOCK (double payment)."""
     if event.kind not in (EventKind.INVOICE_PAYMENT, EventKind.VENDOR_PAYMENT):
@@ -244,6 +280,46 @@ def _new_vendor_small_amount(event: AgentEvent, ctx: PolicyContext) -> Optional[
         ),
         policy_refs=["new_vendor_small_amount"],
         risk_score=0.45,
+        decided_by=DecisionLayer.RULES,
+    )
+
+
+@register_rule
+def _approved_supplier_payment(event: AgentEvent, ctx: PolicyContext) -> Optional[PolicyResult]:
+    """A clean payment to an established, allowlisted supplier -> APPROVE.
+
+    The autopilot's positive path — the agent actually doing its job: paying a
+    supplier the owner approved, that we have a payment relationship with, for
+    the correct amount. This is what makes Arbiter a product (it pays) rather
+    than just a tripwire (it blocks).
+
+    Gated hard so autonomy == owner intent:
+      * requires a configured allowlist with this payee on it — an unconfigured
+        allowlist never auto-pays (falls through to the safe escalate);
+      * requires an established relationship (known / has history) — the first
+        payment to a brand-new approved supplier still escalates once;
+      * requires the amount to reconcile against the stored invoice.
+    The dangerous patterns (duplicate, amount mismatch, detail change) are
+    registered earlier and fire first, so we only reach here on a clean event.
+    """
+    if event.kind != EventKind.VENDOR_PAYMENT:
+        return None
+    if ctx.approved_payees is None or event.vendor_id not in ctx.approved_payees:
+        return None  # not an owner-approved payee -> never auto-pay here
+    if not (event.vendor_known or event.vendor_history_count > 0):
+        return None  # brand-new approved supplier escalates the first time
+    if event.amount is None:
+        return None
+    if event.invoice_amount is not None and event.invoice_amount != event.amount:
+        return None  # amount_mismatch already blocked this; guard anyway
+    return PolicyResult(
+        decision=DecisionKind.APPROVE,
+        reason=(
+            f"Approved supplier '{event.vendor_id}' paid {event.amount} {event.currency} "
+            "— on the owner's allowlist, established relationship, amount reconciled."
+        ),
+        policy_refs=["approved_supplier_payment"],
+        risk_score=0.1,
         decided_by=DecisionLayer.RULES,
     )
 
