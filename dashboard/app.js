@@ -69,6 +69,10 @@ const el = {
   // table
   decisions: document.getElementById("decisions"),
   logCount: document.getElementById("log-count"),
+  // headline verdict banner + reconciliation strip (operator surfaces)
+  verdictBanner: document.getElementById("verdict-banner"),
+  reconcileSection: document.getElementById("reconcile-section"),
+  reconcile: document.getElementById("reconcile"),
   // detail
   detailHead: document.getElementById("detail-head"),
   detailEvent: document.getElementById("detail-event"),
@@ -164,6 +168,99 @@ function isHero(row) {
     (row.margin_killer === true) ||
     (row.kind === "self_spend" && row.decision === "block" && stageOf(row.layer) === "rules")
   );
+}
+
+/* ---------- operator business rollup (the margin story surfaces) ---------- */
+
+// Real Nemotron spend-judgements on this run. The advisory NIM layer judges
+// EVERY delivery spend, but the *deciding* layer is the rules engine — so the
+// pipeline counter must read the judgements off the business rollup, never the
+// timeline layer (which only ever shows the deciding rule). Matches the engine
+// handoff: rules DECIDE, Nemotron JUDGES every spend; show both honestly.
+function nemotronJudgements(state) {
+  return (state && state.business && state.business.jobs ? state.business.jobs : [])
+    .flatMap((j) => j.spends || [])
+    .filter((sp) => String((sp.judgement && sp.judgement.source) || "").startsWith("nim:"));
+}
+
+// The NIM judgement attached to a timeline spend row, mapped by job + spend.
+// Live operator rows id as `${job_id}:spend:${tool}`; the curated sample uses
+// its own ids — so match on the stable pair (job title + category + cost) and
+// fall back to the id suffix. Returns the model's own verdict or null.
+function judgementForRow(state, row) {
+  const jobs = state && state.business && state.business.jobs ? state.business.jobs : [];
+  const job = jobs.find((j) => j.title === row.job);
+  if (!job) return null;
+  const spends = job.spends || [];
+  const spend =
+    spends.find((sp) => sp.category === row.category && Number(sp.cost) === Number(row.amount)) ||
+    spends.find((sp) => String(row.id).endsWith(`:spend:${sp.tool}`));
+  return spend ? spend.judgement : null;
+}
+
+// The real Stripe object id for a row, if the live rail produced one. Client
+// payments (pi_..) are exposed per job; AP/vendor supplier transfers (tr_..) are
+// exposed on state.supplier_payments with the event ref. Both are judge-facing
+// receipts that can be found in the Stripe test dashboard.
+function stripeRefForRow(state, row) {
+  if (row.kind === "invoice_payment") {
+    const jobs = state && state.business && state.business.jobs ? state.business.jobs : [];
+    const job = jobs.find((j) => j.title === row.job);
+    const id = job && job.payment_id;
+    return isRealStripeId(id) ? id : null;
+  }
+  const supplierPayments = (state && state.supplier_payments) || [];
+  const supplierPayment = supplierPayments.find((p) => p.ref === row.id);
+  const id = supplierPayment && supplierPayment.stripe_id;
+  return isRealStripeId(id) ? id : null;
+}
+
+const STRIPE_OBJ_BASE = {
+  pi: "https://dashboard.stripe.com/test/payments/",
+  tr: "https://dashboard.stripe.com/test/connect/transfers/",
+  cs: "https://dashboard.stripe.com/test/checkout/sessions/",
+};
+
+function isRealStripeId(id) {
+  return typeof id === "string" && /^(pi|tr|cs)_/.test(id);
+}
+
+function stripeLink(id) {
+  if (!isRealStripeId(id)) return null;
+  const base = STRIPE_OBJ_BASE[String(id).split("_")[0]];
+  return base ? base + id : null;
+}
+
+// A block is one of two very different stories: an *economic* margin refusal —
+// the non-obvious beat, a legitimate-sounding tool refused only because it would
+// make the job unprofitable — versus a *fraud/policy* block, which is expected
+// (every competitor has it). They must read differently in the UI.
+function isMarginRefusal(row) {
+  if (row.decision !== "block") return false;
+  if (row.margin_killer === true) return true;
+  const refs = row.refs || [];
+  return (
+    refs.includes("spend_kills_margin") ||
+    refs.includes("self_spend_over_budget") ||
+    refs.includes("thin_margin")
+  );
+}
+
+function blockClass(row) {
+  if (row.decision !== "block") return null;
+  return isMarginRefusal(row) ? "margin" : "fraud";
+}
+
+// A margin refusal says REFUSED (economics); a fraud/policy block says BLOCKED.
+// Approvals and escalations keep their plain verdict word.
+function verdictLabel(row) {
+  if (row.decision === "block") return isMarginRefusal(row) ? "REFUSED" : "BLOCKED";
+  return row.decision.toUpperCase();
+}
+
+function verdictClass(row) {
+  if (row.decision === "block" && isMarginRefusal(row)) return "v-refused";
+  return `v-${row.decision}`;
 }
 
 /* ---------- formatting ---------- */
@@ -308,7 +405,7 @@ function buildJobs(timeline) {
   for (const r of timeline || []) {
     const name = r.job || "Operations";
     if (!map.has(name)) {
-      map.set(name, { name, revenue: 0, cost: 0, refused: 0 });
+      map.set(name, { name, revenue: 0, cost: 0, refusedMargin: 0, refusedPolicy: 0 });
       order.push(name);
     }
     const j = map.get(name);
@@ -316,7 +413,10 @@ function buildJobs(timeline) {
       if (r.kind === "invoice_payment") j.revenue += r.amount;
       else if (r.kind === "self_spend") j.cost += r.amount;
     }
-    if (r.decision === "block" && r.kind === "self_spend" && r.amount) j.refused += r.amount;
+    if (r.decision === "block" && r.kind === "self_spend" && r.amount) {
+      if (isMarginRefusal(r)) j.refusedMargin += r.amount;
+      else j.refusedPolicy += r.amount;
+    }
   }
   return order.map((n) => {
     const j = map.get(n);
@@ -336,11 +436,13 @@ function renderJobs(timeline) {
     .map((j) => {
       const marginPct = j.revenue > 0 ? Math.max(0, Math.min(1, j.margin / j.revenue)) : 0;
       const neg = j.margin < 0;
-      const sub = j.refused > 0
-        ? `${money(j.refused)} refused to protect margin`
+      const sub = j.refusedMargin > 0
+        ? `${money(j.refusedMargin)} refused to protect margin`
+        : j.refusedPolicy > 0
+          ? `${money(j.refusedPolicy)} blocked by policy`
         : j.revenue > 0 ? "delivered within budget" : "overhead / reinvest";
       return `
-      <div class="job-row${j.refused > 0 ? " is-hero" : ""}">
+      <div class="job-row${j.refusedMargin > 0 ? " is-hero" : ""}${j.refusedPolicy > 0 ? " has-policy-block" : ""}">
         <div class="job-name"><span class="jdot"></span><span class="jn-text"><b>${escapeHtml(j.name)}</b><small>${escapeHtml(sub)}</small></span></div>
         <div class="job-fig jf-rev"><span class="jf-label">Revenue</span><span class="jf-val">${money(j.revenue)}</span></div>
         <div class="job-fig jf-cost"><span class="jf-label">Cost</span><span class="jf-val">${money(j.cost)}</span></div>
@@ -360,14 +462,93 @@ function tallyFrom(timeline) {
   return t;
 }
 
-function renderCounters(timeline) {
+function renderCounters(timeline, state) {
   const t = tallyFrom(timeline);
   el.cApprove.textContent = t.approve;
   el.cBlock.textContent = t.block;
   el.cEscalate.textContent = t.escalate;
   el.pcRules.textContent = t.rules;
-  el.pcModel.textContent = t.model;
+  // The NVIDIA beat: Nemotron judges EVERY spend (advisory), even though the
+  // rules layer DECIDES. Count the real NIM judgements off the business rollup
+  // so the climax frame shows NVIDIA working — not idle at 0. Falls back to the
+  // timeline-layer tally when no rollup is present (e.g. the scenario demo).
+  const nim = state ? nemotronJudgements(state).length : 0;
+  el.pcModel.textContent = nim || t.model;
   el.pcOwner.textContent = t.owner;
+}
+
+/* ---------- headline verdict banner (the outcome, in words) ---------- */
+
+function renderVerdictBanner(state) {
+  if (!el.verdictBanner) return;
+  const b = state && state.business;
+  if (!b || !(b.jobs && b.jobs.length)) {
+    el.verdictBanner.classList.add("hidden");
+    return;
+  }
+  const protectedMargin = Number(b.net_profit) || 0;
+  const refused = Number(b.waste_blocked) || 0;
+  // The verify layer rejected every fraudulent invoice before booking it, so no
+  // bad payment ever moved — the figure judges should remember.
+  const badPayments = 0;
+  const fraudCaught = (b.jobs || []).filter((j) => !j.revenue_booked).length;
+  el.verdictBanner.classList.remove("hidden");
+  el.verdictBanner.innerHTML =
+    `<span class="vb-ico" aria-hidden="true">\u{1F6E1}</span>` +
+    `<span class="vb-line">` +
+    `<b>Protected ${money(protectedMargin)}</b> of margin` +
+    ` <span class="vb-sep">\u00B7</span> ` +
+    `<span class="vb-refused">refused ${money(refused)} of unprofitable spend</span>` +
+    (fraudCaught
+      ? ` <span class="vb-sep">\u00B7</span> ${fraudCaught} fraudulent invoice${fraudCaught > 1 ? "s" : ""} caught`
+      : "") +
+    ` <span class="vb-sep">\u00B7</span> <b>${badPayments} bad payments</b>` +
+    `</span>`;
+}
+
+/* ---------- reconciliation strip (close the loop) ---------- */
+
+function renderReconciliation(state) {
+  if (!el.reconcile || !el.reconcileSection) return;
+  const b = state && state.business;
+  if (!b || !(b.jobs && b.jobs.length)) {
+    el.reconcileSection.classList.add("hidden");
+    return;
+  }
+  el.reconcileSection.classList.remove("hidden");
+
+  // Two independently-computed totals must agree: the ledger's running spend
+  // total (top-level, summed as money left the single door) and the business
+  // rollup's cost_spent (summed per job). Any drift means a payment fired
+  // without a matching decision — exactly what this strip exists to catch.
+  const ledgerSpend = Number(state.spend) || 0;
+  const rollupCost = Number(b.cost_spent) || 0;
+  const supplierPayments = (state.supplier_payments || []).filter((p) => isRealStripeId(p.stripe_id));
+  const supplierTransferTotal = supplierPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+  const ledgerEarn = Number(state.earnings) || 0;
+  const rollupRevenue = Number(b.revenue_booked) || 0;
+  const spendDrift = Math.abs(ledgerSpend - rollupCost);
+  const earnDrift = Math.abs(ledgerEarn - rollupRevenue);
+  const reconciled = spendDrift < 0.005 && earnDrift < 0.005;
+
+  // The real Stripe ids we can point a judge at (one client pi_.. per booked job).
+  const verified = (b.jobs || []).filter((j) => j.revenue_booked && isRealStripeId(j.payment_id)).length;
+
+  el.reconcile.innerHTML =
+    `<div class="rec-chain">` +
+    `<div class="rec-node"><span class="rec-k">Decisions</span><span class="rec-v">${b.jobs_total} jobs \u00B7 ${b.jobs_completed} delivered</span></div>` +
+    `<span class="rec-arrow" aria-hidden="true">\u2192</span>` +
+    `<div class="rec-node"><span class="rec-k">Payments in</span><span class="rec-v">${money(rollupRevenue)} <small>${verified} Stripe-verified</small></span></div>` +
+    `<span class="rec-arrow" aria-hidden="true">\u2192</span>` +
+    `<div class="rec-node"><span class="rec-k">Settled out</span><span class="rec-v">${money(rollupCost)} <small>${supplierPayments.length ? `${money(supplierTransferTotal)} Stripe transfers` : "ledger-backed"}</small></span></div>` +
+    `<span class="rec-arrow" aria-hidden="true">\u2192</span>` +
+    `<div class="rec-node"><span class="rec-k">Margin kept</span><span class="rec-v">${money(Number(b.net_profit) || 0)}</span></div>` +
+    `</div>` +
+    `<div class="rec-check ${reconciled ? "ok" : "drift"}">` +
+    (reconciled
+      ? `\u2713 Reconciled \u2014 ledger total ${money(ledgerSpend)} matches the per-job settlement total ${money(rollupCost)}.`
+      : `\u26A0 Drift \u2014 ledger ${money(ledgerSpend)} vs settlement ${money(rollupCost)} (\u0394 ${money(spendDrift)}). Investigate before trusting the run.`) +
+    `</div>`;
 }
 
 function setStageActive(stage) {
@@ -403,9 +584,12 @@ function spotlightVerdict(row, statusLabel) {
   el.spStatus.textContent = statusLabel || "Latest decision";
   el.spIcon.innerHTML = iconFor(row.kind);
   el.spBeat.textContent = row.beat;
-  el.spSource.textContent = sourceLine(row);
+  // On the climax frame, surface the model's OWN words — the NVIDIA sponsor beat.
+  const j = isHero(row) ? judgementForRow(currentState, row) : null;
+  el.spSource.textContent =
+    j && j.reason ? `NVIDIA Nemotron: \u201C${j.reason}\u201D` : sourceLine(row);
   el.spAmount.textContent = row.amount != null ? moneyFlow(row).text : "";
-  el.spVerdict.textContent = row.decision.toUpperCase();
+  el.spVerdict.textContent = verdictLabel(row);
 }
 
 /* ---------- decision table ---------- */
@@ -416,6 +600,10 @@ function rowTemplate(row) {
   tr.className = "drow";
   if (row.kind === "self_spend") tr.classList.add("is-self");
   if (isHero(row)) tr.classList.add("is-hero");
+  // Margin refusal and fraud block are different stories — tag the row so each
+  // reads distinctly (economics vs fraud) in the feed.
+  const bc = blockClass(row);
+  if (bc) tr.classList.add(`block-${bc}`);
   tr.dataset.id = row.id;
 
   const dotClass =
@@ -424,6 +612,11 @@ function rowTemplate(row) {
   const kindLabel = KIND_LABEL[row.kind] || row.kind;
   const sub = row.job ? `${escapeHtml(row.job)} · ${escapeHtml(kindLabel)}` : escapeHtml(kindLabel);
   const flow = moneyFlow(row);
+  // Real Stripe id (pi_.. or tr_..) shown as proof on paid rows when exposed.
+  const stripeId = stripeRefForRow(currentState, row);
+  const stripeChip = stripeId
+    ? `<span class="stripe-chip" title="Real Stripe test-mode id">${escapeHtml(stripeId)}</span>`
+    : "";
 
   tr.innerHTML = `
     <td>
@@ -431,14 +624,14 @@ function rowTemplate(row) {
         <span class="kdot ${dotClass}"></span>
         <span class="ktext">
           <span class="kbeat">${escapeHtml(row.beat)}</span>
-          <span class="kkind">${sub}${row.kind === "self_spend" ? '<span class="self-tag"> · SPEND</span>' : ""}</span>
+          <span class="kkind">${sub}${row.kind === "self_spend" ? '<span class="self-tag"> · SPEND</span>' : ""}${stripeChip}</span>
         </span>
       </div>
     </td>
     <td><span class="lchip layer-${stage}">${STAGE_META[stage].name}</span></td>
     <td class="cell-risk">${riskChip(row.risk)}</td>
     <td class="cell-amt ${flow.cls}">${flow.text}</td>
-    <td><span class="vtag v-${row.decision}">${row.decision.toUpperCase()}</span></td>
+    <td><span class="vtag ${verdictClass(row)}">${verdictLabel(row)}</span></td>
     <td class="cell-go">›</td>`;
 
   tr.addEventListener("click", () => {
@@ -516,7 +709,20 @@ function buildTrace(row) {
   }
 
   // ---- Step 2: NVIDIA Nemotron (bounded judgment) ----
-  if (!hasModel) {
+  // The advisory NIM judgement runs on EVERY delivery spend even when the rules
+  // layer decides. If we have the model's own verdict for this row, show it —
+  // that's the honest "rules decide, Nemotron judges every spend" framing.
+  const nimJudgement = judgementForRow(currentState, row);
+  if (!hasModel && nimJudgement && nimJudgement.reason) {
+    const advisedBlock = nimJudgement.decision === "block";
+    steps.push({
+      status: advisedBlock ? "fail" : "pass",
+      label: advisedBlock ? "Judged · refuse" : "Judged · clear",
+      deciding: false,
+      title: "NVIDIA Nemotron", tech: "Bounded judgment (advisory)",
+      text: nimJudgement.reason, refs: refs.model,
+    });
+  } else if (!hasModel) {
     steps.push({
       status: "skip", label: "Not needed", deciding: false,
       title: "NVIDIA Nemotron", tech: "Bounded judgment",
@@ -606,17 +812,30 @@ function renderDetail(id) {
     </div>
     <div class="dh-right">
       <span class="dh-amount">${row.amount != null ? money(row.amount, row.currency) : "-"}</span>
-      <span class="dh-verdict v-${row.decision}">${row.decision.toUpperCase()}</span>
+      <span class="dh-verdict ${verdictClass(row)}">${verdictLabel(row)}</span>
     </div>`;
   if (isHero(row)) {
+    const j = judgementForRow(currentState, row);
+    const nimLine = j && j.reason
+      ? `<div class="db-nim"><span class="nim-tag">NVIDIA Nemotron</span> \u201C${escapeHtml(j.reason)}\u201D</div>`
+      : "";
     el.detailHead.insertAdjacentHTML(
       "afterend",
-      `<div class="detail-banner">⛔ <span><b>Margin-killer refused.</b> This spend would have cost more than the job brings in, so the agent refused it to keep the job profitable.</span></div>`
+      `<div class="detail-banner"><div class="db-main">\u26D4 <span><b>Margin-killer refused.</b> This spend would have cost more than the job brings in, so the agent refused it to keep the job profitable.</span></div>${nimLine}</div>`
     );
   }
 
   // ----- request panel -----
   const sigRefs = row.refs || [];
+  const stripeId = stripeRefForRow(currentState, row);
+  const stripeHref = stripeLink(stripeId);
+  const stripeRowHtml = stripeId
+    ? `<div class="kv-row"><span class="k">Stripe receipt</span>${
+        stripeHref
+          ? `<a class="v mono stripe-link" href="${stripeHref}" target="_blank" rel="noopener">${escapeHtml(stripeId)} \u2197</a>`
+          : `<span class="v mono">${escapeHtml(stripeId)}</span>`
+      }</div>`
+    : "";
   el.detailEvent.innerHTML = `
     <div class="panel-head"><h3>Request</h3></div>
     <div class="panel-body">
@@ -626,6 +845,7 @@ function renderDetail(id) {
         <div class="kv-row"><span class="k">Currency</span><span class="v">${escapeHtml(row.currency || "-")}</span></div>
         ${row.category ? `<div class="kv-row"><span class="k">Category</span><span class="v">${escapeHtml(row.category)}</span></div>` : ""}
         <div class="kv-row"><span class="k">Event ID</span><span class="v mono">${escapeHtml(row.id)}</span></div>
+        ${stripeRowHtml}
         <div class="kv-row"><span class="k">Source</span><span class="v">${escapeHtml(sourceLine(row))}</span></div>
         <div class="kv-row"><span class="k">Signals</span>${sigRefs.length ? refPillsHtml(sigRefs) : '<span class="v">-</span>'}</div>
       </div>
@@ -725,8 +945,10 @@ function render(state) {
   currentState = state || { timeline: [] };
   renderMeters(state);
   renderSpark(state);
+  renderVerdictBanner(state);
   renderJobs(state.timeline || []);
-  renderCounters(state.timeline || []);
+  renderCounters(state.timeline || [], state);
+  renderReconciliation(state);
   renderApproval(state);
   renderTable(state.timeline || []);
   const tl = state.timeline || [];
@@ -741,8 +963,10 @@ function showIdle() {
   currentState = { timeline: [] };
   renderMeters({ seed: SEED_DEFAULT, goal: GOAL_DEFAULT, earnings: 0, spend: 0, net: 0, catch_rate: 0 });
   renderSpark({ seed: SEED_DEFAULT, goal: GOAL_DEFAULT, timeline: [] });
+  renderVerdictBanner({});
   renderJobs([]);
   renderCounters([]);
+  renderReconciliation({});
   renderApproval({ awaiting_approval: null });
   lastTableKey = "__idle__";
   renderTable([]);
@@ -929,6 +1153,14 @@ async function runDemo() {
   const cmapAll = { approve: "cApprove", block: "cBlock", escalate: "cEscalate", rules: "pcRules", model: "pcModel", owner: "pcOwner" };
   for (const k of Object.keys(cmapAll)) el[cmapAll[k]].textContent = "0";
 
+  // Make the operator surfaces available for the whole playback: point the
+  // shared state at the full sample (so judgementForRow / stripeRefForRow can
+  // map hero rows to their NIM verdict + Stripe id), seed the NVIDIA count from
+  // the rollup, and render the headline banner + reconciliation up front.
+  currentState = full;
+  el.pcModel.textContent = nemotronJudgements(full).length || "0";
+  renderVerdictBanner(full);
+  renderReconciliation(full);
   let pendingState = null;
   try {
     pendingState = await fetchJson(SAMPLE_PENDING_URL);

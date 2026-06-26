@@ -415,7 +415,8 @@ a { color: inherit; text-decoration: none; }
 .jobs { display: flex; flex-direction: column; }
 .job-row { display: grid; grid-template-columns: 1.5fr 0.8fr 0.8fr 0.9fr 1.1fr; align-items: center; gap: 14px; padding: 14px 18px; }
 .job-row + .job-row { border-top: 1px solid var(--line); }
-.job-row.is-hero { box-shadow: inset 3px 0 0 var(--approve); }
+.job-row.is-hero { box-shadow: inset 3px 0 0 var(--escalate); }
+.job-row.has-policy-block { box-shadow: inset 3px 0 0 var(--block); }
 .job-name { font-weight: 700; font-size: 14px; color: var(--text); display: flex; align-items: center; gap: 10px; min-width: 0; }
 .job-name .jdot { width: 9px; height: 9px; border-radius: 999px; background: var(--accent); flex: 0 0 9px; }
 .job-name .jn-text { min-width: 0; display: flex; flex-direction: column; }
@@ -438,3 +439,76 @@ a { color: inherit; text-decoration: none; }
   .job-row { grid-template-columns: 1.4fr 0.9fr 0.9fr; }
   .job-row .jf-margin, .job-row .job-bar { display: none; }
 }
+
+/* ---------- Headline verdict banner (the outcome, in words) ---------- */
+.verdict-banner {
+  display: flex; align-items: center; gap: 13px;
+  background: linear-gradient(90deg, rgba(47,191,116,0.12), var(--surface));
+  border: 1px solid rgba(47,191,116,0.4); border-left: 3px solid var(--approve);
+  border-radius: var(--radius); padding: 15px 18px; margin-bottom: 16px;
+  font-size: 16px; line-height: 1.4; color: var(--text);
+}
+.verdict-banner.hidden { display: none; }
+.verdict-banner .vb-ico { font-size: 20px; flex: 0 0 auto; }
+.verdict-banner .vb-line { min-width: 0; }
+.verdict-banner b { font-weight: 800; }
+.verdict-banner .vb-sep { color: var(--faint); margin: 0 2px; }
+/* The thing competitors can't claim — a legitimate spend refused on economics. */
+.verdict-banner .vb-refused {
+  font-weight: 800; color: var(--escalate);
+  background: var(--escalate-dim); border-radius: 7px; padding: 2px 9px;
+  box-shadow: inset 0 0 0 1px rgba(240,169,46,0.35);
+}
+
+/* ---------- Margin refusal vs fraud block (two different stories) ---------- */
+/* A margin refusal is the non-obvious beat (economics) — amber, distinct. */
+.vtag.v-refused { background: var(--escalate-dim); color: var(--escalate); box-shadow: inset 0 0 0 1px rgba(240,169,46,0.4); }
+.drow.block-margin td:first-child { box-shadow: inset 3px 0 0 var(--escalate); }
+.drow.block-margin .kdot { background: var(--escalate); }
+/* A fraud / policy block is expected — keep it the plain red. */
+.drow.block-fraud td:first-child { box-shadow: inset 3px 0 0 var(--block); }
+/* The margin hero keeps the strongest treatment. */
+.drow.is-hero.block-margin td:first-child { box-shadow: inset 3px 0 0 var(--escalate); }
+.detail-banner .db-main { display: flex; gap: 10px; align-items: center; }
+.detail-banner .db-nim { margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(240,86,107,0.25); font-style: italic; color: #ffd9b0; font-size: 13px; line-height: 1.5; }
+.detail-banner .db-nim .nim-tag { display: inline-block; font-style: normal; font-weight: 800; font-size: 10px; letter-spacing: 0.5px; text-transform: uppercase; color: #0c1500; background: var(--nvidia); padding: 2px 7px; border-radius: 6px; margin-right: 7px; }
+
+/* ---------- Stripe receipts ---------- */
+.stripe-chip {
+  display: inline-block; margin-left: 8px;
+  font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 10px;
+  color: #c3bdff; background: rgba(99,91,255,0.14);
+  border: 1px solid rgba(99,91,255,0.35); border-radius: 6px; padding: 1px 6px;
+  vertical-align: middle;
+}
+.stripe-link { color: #a9a3ff !important; text-decoration: none; }
+.stripe-link:hover { text-decoration: underline; }
+
+/* ---------- Reconciliation strip ---------- */
+#reconcile-section.hidden { display: none; }
+.reconcile { padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; }
+.rec-chain { display: flex; align-items: stretch; gap: 10px; flex-wrap: wrap; }
+.rec-node { flex: 1; min-width: 130px; display: flex; flex-direction: column; gap: 4px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 11px 13px; }
+.rec-node .rec-k { font-size: 10px; text-transform: uppercase; letter-spacing: 0.7px; color: var(--faint); font-weight: 700; }
+.rec-node .rec-v { font-size: 16px; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
+.rec-node .rec-v small { font-size: 10.5px; font-weight: 600; color: var(--muted); }
+.rec-arrow { align-self: center; color: var(--line-2); font-weight: 700; flex: 0 0 auto; }
+.rec-check { font-size: 13px; font-weight: 600; border-radius: 10px; padding: 11px 14px; line-height: 1.5; }
+.rec-check.ok { color: var(--approve); background: var(--approve-dim); border: 1px solid rgba(47,191,116,0.35); }
+.rec-check.drift { color: var(--block); background: var(--block-dim); border: 1px solid rgba(240,86,107,0.4); }
+@media (max-width: 720px) { .rec-chain { flex-direction: column; } .rec-arrow { transform: rotate(90deg); } }
+
+/* ---------- Phone-framed escalation (human is the final layer) ---------- */
+.detail-banner { flex-direction: column; align-items: flex-start; }
+.approval-card { max-width: 440px; margin-left: auto; margin-right: auto; border-radius: 26px; box-shadow: 0 30px 80px -30px rgba(0,0,0,0.85), 0 0 0 1px rgba(240,169,46,0.25); position: relative; }
+.phone-bar { display: flex; align-items: center; justify-content: space-between; margin: -4px 0 12px; padding: 0 6px; position: relative; }
+.phone-bar .pb-time { font-size: 12px; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
+.phone-bar .pb-notch { position: absolute; left: 50%; transform: translateX(-50%); top: -2px; width: 76px; height: 16px; background: rgba(0,0,0,0.55); border-radius: 0 0 12px 12px; }
+.phone-bar .pb-status { display: inline-flex; align-items: center; gap: 5px; }
+.phone-bar .pb-sig, .phone-bar .pb-wifi, .phone-bar .pb-batt { display: inline-block; background: var(--text); opacity: 0.85; }
+.phone-bar .pb-sig { width: 15px; height: 10px; clip-path: polygon(0 100%, 20% 100%, 20% 60%, 45% 60%, 45% 35%, 70% 35%, 70% 12%, 100% 12%, 100% 100%); }
+.phone-bar .pb-wifi { width: 13px; height: 10px; border-radius: 2px; clip-path: polygon(50% 0, 100% 38%, 82% 55%, 50% 28%, 18% 55%, 0 38%); }
+.phone-bar .pb-batt { width: 22px; height: 11px; border-radius: 3px; box-shadow: inset 0 0 0 1.5px var(--text); background: transparent; position: relative; }
+.phone-bar .pb-batt::after { content: ""; position: absolute; left: 1.5px; top: 1.5px; bottom: 1.5px; width: 70%; background: var(--approve); border-radius: 1.5px; }
+.phone-bar .pb-batt::before { content: ""; position: absolute; right: -3px; top: 3px; bottom: 3px; width: 2px; background: var(--text); border-radius: 0 2px 2px 0; }
+

@@ -8,6 +8,178 @@
   "margin": 645.0,
   "catch_rate": 0.83,
   "awaiting_approval": null,
+  "operator_mode": true,
+  "stripe_backend": "live-test",
+  "business": {
+    "starting_balance": 50.0,
+    "balance": 695.0,
+    "revenue_booked": 800.0,
+    "cost_spent": 155.0,
+    "waste_blocked": 700.0,
+    "fraud_revenue_rejected": 0.0,
+    "net_profit": 645.0,
+    "jobs_completed": 3,
+    "jobs_total": 3,
+    "all_margins_protected": true,
+    "jobs": [
+      {
+        "job_id": "northstar",
+        "title": "Northstar \u2014 brand video",
+        "revenue": 480.0,
+        "protected_margin": 150.0,
+        "revenue_booked": true,
+        "invoice_decision": "approve",
+        "invoice_reason": "Invoice INV-NS-118 verified and reconciled \u2014 money in.",
+        "cost_spent": 105.0,
+        "waste_blocked": 520.0,
+        "margin_kept": 375.0,
+        "margin_protected": true,
+        "payment_id": "pi_3PNorthstarBrand480",
+        "spends": [
+          {
+            "tool": "stock_footage",
+            "category": "stock_footage",
+            "cost": 60.0,
+            "status": "paid",
+            "decision": "approve",
+            "reason": "Within the job's budget \u2014 margin stays healthy.",
+            "margin_safe_budget": 330.0,
+            "owner_confirmed": false,
+            "judgement": {
+              "decision": "approve",
+              "reason": "Licensing stock footage is on-goal for the edit and well inside the margin-safe budget.",
+              "margin_ok": true,
+              "on_goal": true,
+              "risk_score": 0.1,
+              "source": "nim:nvidia/nemotron-3-super-120b-a12b"
+            }
+          },
+          {
+            "tool": "render_credits",
+            "category": "render_credits",
+            "cost": 45.0,
+            "status": "paid",
+            "decision": "approve",
+            "reason": "Running cost \u00a3105 of \u00a3480 \u2014 margin protected.",
+            "margin_safe_budget": 270.0,
+            "owner_confirmed": false,
+            "judgement": {
+              "decision": "approve",
+              "reason": "Cloud render credits are needed to export the final cut and keep the job comfortably profitable.",
+              "margin_ok": true,
+              "on_goal": true,
+              "risk_score": 0.12,
+              "source": "nim:nvidia/nemotron-3-super-120b-a12b"
+            }
+          },
+          {
+            "tool": "premium_pro_suite",
+            "category": "premium_tooling",
+            "cost": 520.0,
+            "status": "refused_margin",
+            "decision": "block",
+            "reason": "A \u00a3520 'pro suite' upgrade exceeds the entire \u00a3480 job revenue \u2014 approving it would make the job unprofitable.",
+            "margin_safe_budget": 225.0,
+            "owner_confirmed": true,
+            "judgement": {
+              "decision": "block",
+              "reason": "Buying the premium pro suite would exceed the margin-safe budget, making the job unprofitable \u2014 refuse it however useful it looks.",
+              "margin_ok": false,
+              "on_goal": true,
+              "risk_score": 0.8,
+              "source": "nim:nvidia/nemotron-3-super-120b-a12b"
+            }
+          }
+        ]
+      },
+      {
+        "job_id": "lumen",
+        "title": "Lumen \u2014 landing page",
+        "revenue": 320.0,
+        "protected_margin": 120.0,
+        "revenue_booked": true,
+        "invoice_decision": "approve",
+        "invoice_reason": "Invoice INV-LU-204 verified against the landing-page job \u2014 money in.",
+        "cost_spent": 30.0,
+        "waste_blocked": 180.0,
+        "margin_kept": 290.0,
+        "margin_protected": true,
+        "payment_id": "pi_3PLumenLanding320",
+        "spends": [
+          {
+            "tool": "hosting_domain",
+            "category": "hosting",
+            "cost": 30.0,
+            "status": "paid",
+            "decision": "approve",
+            "reason": "Within the \u00a3320 job's budget.",
+            "margin_safe_budget": 200.0,
+            "owner_confirmed": false,
+            "judgement": {
+              "decision": "approve",
+              "reason": "Hosting and a domain are required to ship the page and sit comfortably inside the job's margin.",
+              "margin_ok": true,
+              "on_goal": true,
+              "risk_score": 0.1,
+              "source": "nim:nvidia/nemotron-3-super-120b-a12b"
+            }
+          },
+          {
+            "tool": "contractor_addon",
+            "category": "contractor",
+            "cost": 180.0,
+            "status": "refused_margin",
+            "decision": "block",
+            "reason": "A \u00a3180 contractor add-on leaves only a thin margin on the \u00a3320 job \u2014 owner denied it to protect the margin.",
+            "margin_safe_budget": 170.0,
+            "owner_confirmed": true,
+            "judgement": {
+              "decision": "escalate",
+              "reason": "A \u00a3180 contractor add-on leaves only a thin margin on a \u00a3320 job \u2014 not clearly wrong, so escalate to the owner.",
+              "margin_ok": false,
+              "on_goal": true,
+              "risk_score": 0.55,
+              "source": "nim:nvidia/nemotron-3-super-120b-a12b"
+            }
+          }
+        ]
+      },
+      {
+        "job_id": "operations",
+        "title": "Operations",
+        "revenue": 0.0,
+        "protected_margin": 0.0,
+        "revenue_booked": true,
+        "invoice_decision": "approve",
+        "invoice_reason": "Internal reinvestment \u2014 no client invoice.",
+        "cost_spent": 20.0,
+        "waste_blocked": 0.0,
+        "margin_kept": 0.0,
+        "margin_protected": true,
+        "payment_id": null,
+        "spends": [
+          {
+            "tool": "fraud_detection",
+            "category": "fraud_detection",
+            "cost": 20.0,
+            "status": "paid",
+            "decision": "approve",
+            "reason": "On-goal autonomous reinvest approved, within remaining budget.",
+            "margin_safe_budget": 645.0,
+            "owner_confirmed": false,
+            "judgement": {
+              "decision": "approve",
+              "reason": "A fraud-screening capability is an on-goal reinvestment funded entirely from banked margin.",
+              "margin_ok": true,
+              "on_goal": true,
+              "risk_score": 0.1,
+              "source": "nim:nvidia/nemotron-3-super-120b-a12b"
+            }
+          }
+        ]
+      }
+    ]
+  },
   "timeline": [
     {
       "t": 1781992711.1215363,

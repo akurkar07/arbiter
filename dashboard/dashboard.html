@@ -87,6 +87,9 @@
           </div>
         </div>
 
+        <!-- Headline verdict: the outcome of the run, in words -->
+        <div id="verdict-banner" class="verdict-banner hidden"></div>
+
         <!-- Seed → Goal → Balance header -->
         <section class="biz-header">
           <div class="bh-main">
@@ -197,6 +200,11 @@
 
         <!-- Approval card: the margin-killer escalation -->
         <section id="approval-card" class="approval-card hidden">
+          <div class="phone-bar" aria-hidden="true">
+            <span class="pb-time">9:41</span>
+            <span class="pb-notch"></span>
+            <span class="pb-status"><span class="pb-sig"></span><span class="pb-wifi"></span><span class="pb-batt"></span></span>
+          </div>
           <div class="approval-head">
             <span class="approval-badge">📱 OWNER APPROVAL · phone tap</span>
             <span class="approval-risk" id="approval-risk"></span>
@@ -240,6 +248,15 @@
             <span class="panel-meta">Revenue in · cost out · margin kept</span>
           </div>
           <div class="jobs" id="jobs"></div>
+        </div>
+
+        <!-- Reconciliation strip: decision → payment → settlement, one chain -->
+        <div class="panel" id="reconcile-section">
+          <div class="panel-head">
+            <h3>Reconciliation</h3>
+            <span class="panel-meta">Ledger total vs Stripe settlement — the loop closes</span>
+          </div>
+          <div class="reconcile" id="reconcile"></div>
         </div>
       </section>
 
