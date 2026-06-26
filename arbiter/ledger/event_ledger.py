@@ -34,6 +34,12 @@ class LedgerEntry:
     currency: str = "GBP"
     category: Optional[str] = None
     demo_beat: str = ""
+    # Operator-owned display metadata. The agent core never sets these — a row
+    # produced by a bare ``agent.decide`` keeps the defaults (job=None,
+    # margin_killer=False). The BusinessOperator stamps them via ``enrich`` so
+    # the dashboard can group rows by job and spotlight the margin-refusal beat.
+    job: Optional[str] = None
+    margin_killer: bool = False
 
 
 class EventLedger:
@@ -88,6 +94,25 @@ class EventLedger:
     def net(self) -> float:
         return self._earnings - self._spend
 
+    def enrich(self, event_id: str, *, job: Optional[str] = None,
+               margin_killer: Optional[bool] = None) -> None:
+        """Stamp operator-owned display metadata onto an already-recorded row.
+
+        The operator calls this after a decision lands to tag the row with the
+        job it belongs to and whether it is THE margin-refusal beat. The ledger
+        stays append-only for the decision itself — this only annotates the
+        display fields the dashboard groups and spotlights on; it never changes
+        a decision, amount, or reason. No-ops if the id isn't found so a caller
+        can enrich defensively.
+        """
+        for entry in reversed(self.entries):
+            if entry.event_id == event_id:
+                if job is not None:
+                    entry.job = job
+                if margin_killer is not None:
+                    entry.margin_killer = margin_killer
+                return
+
     def blocks(self) -> list[LedgerEntry]:
         return [e for e in self.entries if e.decision == "block"]
 
@@ -110,6 +135,9 @@ class EventLedger:
                 "currency": e.currency,
                 "category": e.category,
                 "beat": e.demo_beat,
+                # Operator-stamped display metadata (None / False on bare rows).
+                "job": e.job,
+                "margin_killer": e.margin_killer,
             }
             for e in self.entries
         ]

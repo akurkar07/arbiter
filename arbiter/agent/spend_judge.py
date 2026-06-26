@@ -36,6 +36,23 @@ from typing import Optional, Protocol
 from ..models import DecisionKind, SpendContext
 
 
+def _message_text(message) -> str:
+    """Pull the JSON answer text from a chat-completion message.
+
+    Reasoning Nemotron variants put their chain-of-thought in a separate
+    ``reasoning_content`` field and the strict-JSON answer in ``content``. We
+    want ``content``; but if a model with thinking enabled ever returns an empty
+    ``content`` (whole budget spent reasoning) while leaving the JSON in
+    ``reasoning_content``, fall back to that so the hardened parser still gets a
+    shot at the object instead of seeing an empty string and degrading to the
+    malformed fail-safe. Returns "" only when truly nothing came back.
+    """
+    content = (getattr(message, "content", None) or "").strip()
+    if content:
+        return content
+    return (getattr(message, "reasoning_content", None) or "").strip()
+
+
 @dataclass(frozen=True)
 class SpendJudgement:
     """Advisory verdict on a delivery spend. Never moves money itself."""
@@ -261,10 +278,16 @@ class NimSpendJudge:
                     {"role": "user", "content": _build_spend_prompt(spend)},
                 ],
                 temperature=0.2,
-                max_tokens=512,
+                # Reasoning Nemotron variants spend 150-310 completion tokens
+                # *thinking* before they emit the JSON answer; a 512 cap let a
+                # long reasoning trace truncate the answer on the margin-killer
+                # beat (the demo's climax), dropping it to the malformed
+                # fail-safe. 1024 gives the JSON ~3x headroom over the worst
+                # observed trace so the real narrative always lands.
+                max_tokens=1024,
                 response_format={"type": "json_object"},
             )
-            raw = resp.choices[0].message.content or ""
+            raw = _message_text(resp.choices[0].message)
             return _coerce_spend(raw, spend, source=f"nim:{self.model}")
         except Exception as exc:  # network / auth / rate-limit: advise a human, never approve
             raw = json.dumps({

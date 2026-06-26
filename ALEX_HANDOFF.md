@@ -1,151 +1,74 @@
-# Alex — Handoff & Your Interface
+# Alex — handoff & interface
 
-**Repo:** this repository (Ben pushes to GitHub and adds you as collaborator)
+**Repo:** https://github.com/benedict-anokye-davies/arbiter (you're a collaborator)
 **Hackathon:** Nous × NVIDIA × Stripe — deadline EOD June 30, 2026
 **Team:** Ben (agent core + governance, orchestrate, present) · Alex (Stripe + dashboard + phone UI)
 
----
-
-## What's already built (core — DONE)
-
-The entire governance core + agent loop + demo runner is built, tested, and committed:
-
-```
-arbiter/
-  models.py             # AgentEvent, PolicyContext, PolicyResult, DecisionKind
-  policy/rules.py       # 10 deterministic rules (the moat)
-  agent/
-    agent.py            # 3-layer core: rules -> Nemotron -> phone escalation
-    nemotron.py         # bounded LLM layer (MockNemotron, strict JSON, no network)
-    escalation.py       # phone escalation (ConsoleEscalation for demo)
-  ledger/event_ledger.py  # append-only ledger, dashboard-ready timeline
-  reinvest.py           # self-funded reinvest + fraud catch-rate metric
-  stripe_glue.py        # thin interface — YOUR webhook layer implements this
-  scenarios.py          # loads JSON fixtures -> AgentEvent
-  cli.py                # demo runner (python -m arbiter.cli)
-scenarios/*.json        # 10 fixtures covering the full demo storyboard
-tests/test_policy_engine.py  # 13 pytest, all passing
-```
-
-**Proof it works:**
-```
-pytest: 13 passed in 0.02s
-demo CLI: full timeline plays — earn, 4 blocks, 2 escalates, 2 self-blocks, reinvest, improve
-```
-
-Run it yourself:
-```bash
-cd arbiter
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
-pytest                    # 13 passed
-python -m arbiter.cli # full demo timeline
-```
+> **Your current task list is `docs/handoffs/ALEX_TASKS_2026-06-26.md`** — start
+> there. This file is the standing interface reference.
 
 ---
 
-## Your interface — what you implement
+## Where the project actually is (June 26)
 
-### 1. StripeGlue (arbiter/stripe_glue.py)
+The whole engine side is built, live, and tested — **129 passing**:
 
-The agent core calls these methods. The current implementation is a no-op stub
-that records calls. You replace it with real Stripe test-mode calls using
-`stripe_agent_toolkit`:
+- **Governance core** — 14 deterministic rules, 3-layer pipeline (rules → bounded
+  Nemotron → phone escalation), `settle()` single money door. Done.
+- **Real sponsor rails** — `LiveStripeGlue` (Connect Transfers, real test-mode
+  `tr_`/`pi_` ids), real NVIDIA NIM via `nim_nemotron.py` + `spend_judge.py`, Hermes
+  MCP server. All auto-activate when keys are present; fall back to faithful mocks
+  otherwise.
+- **Autonomous operator** (`operator.py`) — the headline demo: earn from invoices,
+  buy what each job needs, refuse margin-killing spend, escalate edge cases, book
+  protected margin. Driven by `POST /run_operator`.
+- **Invoice ingestion** (`ingest/`) — drop a PDF/image invoice, vision-extract,
+  feed the governed pipeline.
+- **Web server** (`web/server.py`) — `/run`, `/run_operator`, `/authorize`,
+  `/state`, `/reset`.
 
-```python
-class StripeGlue:
-    def create_invoice(self, ref: str, amount: float, currency: str = "GBP") -> StripeCall: ...
-    def create_checkout(self, ref: str, amount: float, currency: str = "GBP") -> StripeCall: ...
-    def webhook_received(self, event_type: str, ref: str | None = None) -> StripeCall: ...
-    def provision_capability(self, category: str, amount: float, currency: str = "GBP") -> StripeCall: ...
-```
+The timeline now stamps `job` + `margin_killer` on every row, so your existing
+`isHero()` / per-job grouping fire on **live** data, not just `sample_state.json`.
 
-**Your job:** make these hit Stripe test mode. The agent core doesn't care about
-the Stripe details — it calls `create_checkout` + `webhook_received` for the earn
-beat, and `provision_capability` for the reinvest beat. You wire the real API.
+---
 
-**Webhook receiver:** build a small Flask/FastAPI endpoint that receives
-`checkout.session.completed` and calls into the agent core with an
-`AgentEvent(kind=INVOICE_PAYMENT, ...)`.
+## Your interface — what you own
 
-### 2. Dashboard (dashboard/)
+### 1. Dashboard (`dashboard/`)
+The live story comes from `GET /state`. Press "Go live" → it POSTs `/run_operator`
+and polls `/state`. Each timeline row carries: `id, kind, decision, reason, refs,
+risk, layer, amount, beat, job, margin_killer`. The business rollup is under
+`state.business` (jobs, spends, judgements, `net_profit`, `waste_blocked`, margin
+figures).
 
-The ledger exposes a dashboard-ready timeline:
-```python
-from arbiter.ledger import EventLedger
-ledger.as_timeline()  # list[dict] with: t, id, kind, decision, reason, refs, risk, layer, amount, beat
-```
-
-Build a simple web UI that shows the timeline in real time during the demo.
-Each entry has a `beat` field with the human-readable story line.
+### 2. Stripe surface
+`LiveStripeGlue` already moves test-mode money. Your job is to **surface** the real
+`tr_`/`pi_` ids in the UI and build the webhook receiver if we want live
+invoice-in. The agent core calls `settle()`; you never need to add a payment path —
+if you think you do, that's a red flag, ask first.
 
 ### 3. Phone escalation UI
-
-Replace `ConsoleEscalation` with a real mobile approval UI:
-```python
-from arbiter.agent import EscalationHandler
-
-class PhoneEscalation(EscalationHandler):
-    def request_approval(self, event, result) -> DecisionKind:
-        # push to phone, wait for y/n tap
-        ...
-```
-
-For the demo, a simple Twilio SMS or push notification with a tap-to-approve
-link is enough. The agent core just needs a yes/no back.
-
-### 4. Scenario generator (optional polish)
-
-The 10 JSON fixtures in `scenarios/` cover the demo. If you want to add more
-edge cases, the format is:
-```json
-{
-  "id": "...",
-  "kind": "invoice_payment|vendor_payment|vendor_detail_change|self_spend",
-  "vendor_id": "...", "amount": 480.00, "invoice_amount": 480.00,
-  "vendor_known": true, "vendor_history_count": 6,
-  "message": "", "category": "fraud_detection",
-  "expected_decision": "approve|block|escalate",
-  "demo_beat": "one-line story for the dashboard"
-}
-```
+The backend parks on `awaiting_approval` with `approve_url` / `deny_url`. Replace
+the desktop approve button with a phone-framed surface (Twilio SMS tap-to-approve is
+enough). The core just needs a yes/no back.
 
 ---
 
-## What you do NOT need to touch
-
-- `policy/rules.py` — the deterministic engine. Done, tested, it's the moat.
-- `agent/agent.py` — the 3-layer core. Done.
-- `agent/nemotron.py` — the bounded LLM layer. MockNemotron works for the demo;
-  the real Nemotron NIM call gets wired in when the key is ready.
-- `ledger/event_ledger.py` — done.
-- `reinvest.py` — done.
-- `cli.py` — demo runner. Done.
+## What you do NOT touch
+`arbiter/policy/`, `arbiter/agent/`, `arbiter/operator.py`, `arbiter/ledger/` — the
+governance core, done and tested. Need a new field? Ask and I'll publish it on
+`/state`; you bind it. Keeps your diffs in the dashboard and out of merge-conflict
+range with the core.
 
 ---
 
-## Integration point
-
-When your Stripe webhook fires, call the agent:
+## Integration point (if you wire a live webhook)
 ```python
 from arbiter.agent import ArbiterAgent
 from arbiter.models import AgentEvent, EventKind, PolicyContext
 
 agent = ArbiterAgent(ctx=PolicyContext())
 event = AgentEvent(kind=EventKind.INVOICE_PAYMENT, vendor_id="cust_x", ...)
-result = agent.decide(event, event_id="evt_001", demo_beat="Customer paid invoice")
-# result.decision == DecisionKind.APPROVE | BLOCK | ESCALATE
-# ledger already recorded it
+result = agent.settle(event, event_id="evt_001", demo_beat="Customer paid invoice")
+# result.decision == APPROVE | BLOCK | ESCALATE; ledger already recorded it
 ```
-
----
-
-## Blocking items (repo admin)
-
-1. **Create the GitHub repo** and push this repository to it. — done when you can read this on GitHub
-2. **Add Alex as collaborator** on the repo.
-3. **Share the Google Drive** folder with Alex (hackathon plans + v3 docs + fixtures).
-4. **Stripe test keys** — put `STRIPE_SECRET_KEY` (test mode, `sk_test_...`) and `STRIPE_WEBHOOK_SECRET` in `.env`. No real money.
-
-Once the repo is up, Alex clones and starts on StripeGlue + dashboard. The real
-Nemotron NIM call gets wired in parallel.

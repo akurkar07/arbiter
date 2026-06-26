@@ -797,10 +797,15 @@ function startLive() {
   // Kick the backend so the live timeline actually plays: rebuild a fresh run,
   // then start it. The agent decides server-side and we mirror it via /state.
   // If the backend isn't reachable, pollLive() surfaces "LIVE (no backend)".
+  //
+  // /run_operator (not /run) is the swing demo: the autonomous money-operator
+  // that earns, verifies, and protects each job's margin — the run that emits
+  // the margin_killer hero row + per-job business rollup this UI renders. /run
+  // plays the older AP-autopilot day, which has no margin-refusal climax.
   (async () => {
     try {
       await fetch("/reset", { method: "POST" });
-      await fetch("/run", { method: "POST" });
+      await fetch("/run_operator", { method: "POST" });
     } catch (_) {
       /* no backend; pollLive reports it */
     }

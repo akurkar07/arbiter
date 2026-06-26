@@ -29,6 +29,7 @@ from typing import Optional
 
 from ..models import AgentEvent, PolicyResult
 from .nemotron import NemotronResult, _coerce
+from .spend_judge import _message_text
 
 DEFAULT_MODEL = "nvidia/llama-3.3-nemotron-super-49b-v1"
 NIM_BASE_URL = "https://integrate.api.nvidia.com/v1"
@@ -145,10 +146,14 @@ class NimNemotron:
                     {"role": "user", "content": _build_user_prompt(event, policy_hint)},
                 ],
                 temperature=0.2,
-                max_tokens=512,
+                # See spend_judge._message_text: this reasoning model spends
+                # 150-310 tokens thinking before the JSON answer; 1024 keeps the
+                # bounded-decision JSON from being truncated into the malformed
+                # fail-safe when a reasoning trace runs long.
+                max_tokens=1024,
                 response_format={"type": "json_object"},
             )
-            raw = resp.choices[0].message.content or ""
+            raw = _message_text(resp.choices[0].message)
         except Exception as exc:  # network/auth/rate-limit: stay safe, keep escalate
             raw = json.dumps(
                 {

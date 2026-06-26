@@ -293,6 +293,9 @@ class BusinessOperator:
             event_id=f"{job.job_id}:invoice",
             demo_beat=f"Earn: client pays '{job.title}' (£{job.revenue:.0f})",
         )
+        # Tag the earn row with the job so the dashboard groups it under the job
+        # rather than a generic bucket. The earn row is never a margin killer.
+        self.agent.ledger.enrich(f"{job.job_id}:invoice", job=job.title, margin_killer=False)
         outcome = JobOutcome(
             job_id=job.job_id,
             title=job.title,
@@ -363,6 +366,13 @@ class BusinessOperator:
             demo_beat=f"Spend on '{job.title}': {tool.name} (£{tool.cost:.0f})",
         )
 
+        # Tag the spend row with its job for dashboard grouping. margin_killer is
+        # stamped True ONLY for a margin refusal (below), so an off-goal refusal
+        # and a paid spend both read margin_killer=False and the dashboard
+        # spotlights the right row.
+        row_id = f"{job.job_id}:spend:{tool.name}"
+        self.agent.ledger.enrich(row_id, job=job.title, margin_killer=False)
+
         if result.decision == DecisionKind.APPROVE:
             # Money already moved inside settle() — the single door decides AND
             # executes, so there's no separate pay line that could fire without a
@@ -380,6 +390,10 @@ class BusinessOperator:
         refs = set(result.policy_refs)
         if "self_spend_over_budget" in refs:
             status = SpendStatus.REFUSED_MARGIN
+            # THE beat: a margin refusal is the row the dashboard spotlights.
+            # An off-goal refusal is a block too but must NOT be flagged, so the
+            # hero treatment lands on the margin kill and not the wrong refusal.
+            self.agent.ledger.enrich(row_id, margin_killer=True)
         elif "self_spend_off_goal" in refs:
             status = SpendStatus.REFUSED_OFFGOAL
         else:
