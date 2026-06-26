@@ -239,7 +239,10 @@ class MockSpendJudge:
 
 # --- live NVIDIA NIM spend judge --------------------------------------------
 
-DEFAULT_SPEND_MODEL = "nvidia/llama-3.3-nemotron-super-49b-v1"
+# Current-generation Nemotron 3. The running deployment pins this via the
+# NVIDIA_NIM_MODEL env var (which always wins below); this default exists so a
+# fresh clone with only a key set still runs current-gen, not a last-gen model.
+DEFAULT_SPEND_MODEL = "nvidia/nemotron-3-super-120b-a12b"
 NIM_BASE_URL = "https://integrate.api.nvidia.com/v1"
 
 

@@ -41,6 +41,16 @@ class StripeCall:
     notes: str = ""
     stripe_id: Optional[str] = None
     payee: Optional[str] = None
+    # True when a live rail call was attempted but errored — the call is recorded
+    # (not raised) so governance never crashes, but settle() must NOT count a
+    # failed rail call as executed. Stays False on the stub and on successful
+    # live calls. See settle() in agent.py.
+    failed: bool = False
+    # The governance event id this rail call settled (e.g. "job_02:spend:img").
+    # Stamped by settle() after execution so the dashboard can join a paid row to
+    # its Stripe receipt by id. Optional: ops not driven through settle() (the
+    # inbound checkout/webhook pair) leave it None.
+    event_id: Optional[str] = None
 
 
 class StripeBackend(Protocol):
@@ -166,7 +176,8 @@ class LiveStripeGlue(StripeGlue):
                            notes="live test-mode", stripe_id=session.id)
         except Exception as e:  # noqa: BLE001 — never let a rail error crash governance
             c = StripeCall(op="create_checkout", ref=ref, amount=amount, currency=currency,
-                           notes=f"live call failed, recorded only: {type(e).__name__}: {e}")
+                           notes=f"live call failed, recorded only: {type(e).__name__}: {e}",
+                           failed=True)
         self.calls.append(c)
         return c
 
@@ -193,7 +204,8 @@ class LiveStripeGlue(StripeGlue):
                            notes=f"live test-mode PaymentIntent ({pi.status})", stripe_id=pi.id)
         except Exception as e:  # noqa: BLE001 — never let a rail error crash governance
             c = StripeCall(op="create_payment", ref=ref, amount=amount, currency=currency,
-                           notes=f"live call failed, recorded only: {type(e).__name__}: {e}")
+                           notes=f"live call failed, recorded only: {type(e).__name__}: {e}",
+                           failed=True)
         self.calls.append(c)
         return c
 
@@ -277,7 +289,8 @@ class LiveStripeGlue(StripeGlue):
                            stripe_id=getattr(transfer, "id", None))
         except Exception as e:  # noqa: BLE001
             c = StripeCall(op="pay_supplier", payee=payee, amount=amount, currency=currency, ref=ref,
-                           notes=f"live call failed, recorded only: {type(e).__name__}: {e}")
+                           notes=f"live call failed, recorded only: {type(e).__name__}: {e}",
+                           failed=True)
         self.calls.append(c)
         return c
 

@@ -29,11 +29,16 @@ from arbiter.operator import (
     ToolPurchase,
     demo_jobs,
 )
+from arbiter.procurement import ProcurementScout, demo_catalog
 from arbiter.stripe_glue import StripeGlue
 
 
 def _operator(starting_balance: float = 50.0) -> BusinessOperator:
-    """A fresh operator wired to the real agent with a console (auto) escalation."""
+    """A fresh operator wired to the real agent with a console (auto) escalation.
+
+    Includes the procurement scout so the F3 sourcing beat in ``demo_jobs`` is
+    exercised exactly as the live demo server runs it.
+    """
     agent = ArbiterAgent(
         ctx=PolicyContext(),
         ledger=EventLedger(),
@@ -44,6 +49,7 @@ def _operator(starting_balance: float = 50.0) -> BusinessOperator:
         stripe=StripeGlue(),
         spend_judge=MockSpendJudge(),
         starting_balance=starting_balance,
+        scout=ProcurementScout(demo_catalog()),
     )
 
 
@@ -197,18 +203,21 @@ def test_full_demo_rollup_protects_every_margin() -> None:
     rollup = op.run_all(demo_jobs())
     d = rollup.as_dict()
 
-    # Two clean jobs book revenue (job_01 tide, job_02 banners, job_04 bugfix);
-    # job_03 is fraud and is rejected.
-    assert d["jobs_total"] == 4
-    assert d["jobs_completed"] == 3
+    # Clean jobs book revenue (job_01 tide, job_02 banners, job_04 bugfix,
+    # job_05 sourced banners); job_03 is fraud and is rejected.
+    assert d["jobs_total"] == 5
+    assert d["jobs_completed"] == 4
     assert d["fraud_revenue_rejected"] == 200.0  # the rejected logo job
 
     # Real money math: revenue booked - cost spent = net profit; balance grows.
-    assert d["revenue_booked"] == 140.0 + 90.0 + 120.0
-    assert d["cost_spent"] == 30.0 + 35.0 + 20.0  # the in-budget, on-goal tools
+    assert d["revenue_booked"] == 140.0 + 90.0 + 120.0 + 130.0
+    # In-budget on-goal tools, incl. the scout-sourced £20 image tool on job_05.
+    assert d["cost_spent"] == 30.0 + 35.0 + 20.0 + 20.0
     assert d["waste_blocked"] == 45.0 + 15.0      # margin kill + off-goal
     assert d["net_profit"] == d["revenue_booked"] - d["cost_spent"]
     assert d["balance"] == 50.0 + d["net_profit"]
+    # F3: the scout chose the £20 tool over the £45 premium - real saved margin.
+    assert d["sourcing_savings"] == 25.0
 
     # The invariant that matters: every single job kept its protected margin.
     assert d["all_margins_protected"] is True

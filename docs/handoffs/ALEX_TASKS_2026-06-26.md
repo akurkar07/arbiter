@@ -14,6 +14,29 @@ Each task has a **done-when** so you know when to stop. Rough order of impact.
 
 ---
 
+## UPDATE 2026-06-26 (read first) — P1 is now backend-unblocked
+
+Since this list was written I shipped the backend for tasks **4 (Stripe receipts)**
+and **5 (reconciliation)**. The fields you'd have had to ask for are live on `/state`
+now — see the **`/state` contract** appendix at the bottom for exact shapes. Net:
+
+- **Real Stripe ids are in the feed.** `customer_payments[]` carries inbound `pi_`
+  ids (live-confirmed: `pi_3Tma5c…` retrieved from Stripe, `succeeded`, £140,
+  test-mode). `supplier_payments[]` carries outbound `tr_` ids when a transfer lands.
+- **Every paid row now has a `failed` flag** — render a failed rail call as failed,
+  don't hide it. A judge trusts a dashboard that shows the one that broke.
+- **Reconciliation is a ready-made block** — `reconciliation: {ledger_spend,
+  rail_settled, drift, ok, failed_calls}`. Task 5's "ledger-total == Stripe-total,
+  flag drift" is a direct bind now, no maths in the UI.
+
+Priority order is unchanged: **P0 (Nemotron on the climax + verdict banner + refusal
+made distinct) is still the whole pitch.** P1 is just cheaper than it was. One honest
+caveat to render correctly: self-spend (`provision_capability`) is still a recorded
+stub even on the live rail, so its `stripe_id` is null while inbound `pi_` ids are
+real. Don't label a null-id self-spend as "live-settled" — see the contract note.
+
+---
+
 ## P0 — make the margin story unmissable (this is the whole pitch)
 
 ### 1. Put NVIDIA Nemotron on the climax frame
@@ -63,21 +86,28 @@ tool, refused on economics," not lumped in with the fraud blocks.
 
 ## P1 — sponsor-proof surfaces
 
-### 4. Stripe receipts visible in the UI
+### 4. Stripe receipts visible in the UI  ✅ backend ready (2026-06-26)
 We move real test-mode money (Connect Transfers `tr_...`, PaymentIntents `pi_...`).
 A judge who sees the Stripe id in the dashboard *and* can find it in the Stripe test
 dashboard is the strongest possible proof.
-- Surface the `tr_`/`pi_` id on each paid row (it's in the ledger entry / settlement
-  result). Link out to the Stripe test dashboard object if you can.
-- **Done when:** a paid row shows its real Stripe id from a live run.
+- The ids are on `/state` now: `customer_payments[].stripe_id` (inbound `pi_`) and
+  `supplier_payments[].stripe_id` (outbound `tr_`). Both arrays also carry `failed`.
+- Link out to `https://dashboard.stripe.com/test/payments/{pi_id}` for inbound and
+  `…/test/connect/transfers/{tr_id}` for outbound if you want the click-through.
+- Render a `failed: true` row as a visible failure, not a success with a blank id.
+- **Done when:** a paid row shows its real Stripe id from a live run, and a failed
+  rail call (if any) shows as failed rather than vanishing.
 
-### 5. Reconciliation strip (close the loop)
-After a run, show decision → payment → settlement as one chain: ledger spend total
-== sum of Stripe transfer amounts. This is what makes it read as a *system*, not a
-script. The backend can expose the totals — if you need a `/reconcile` endpoint or
-a field on `/state`, write down exactly what shape you want and I'll wire it.
-- **Done when:** a reconciliation line shows ledger-total == Stripe-total for the
-  run (and flags any drift).
+### 5. Reconciliation strip (close the loop)  ✅ backend ready (2026-06-26)
+After a run, show decision → payment → settlement as one chain. The backend now does
+the maths — `/state.reconciliation` gives you `{ledger_spend, rail_settled, drift,
+ok, failed_calls}` directly.
+- Bind the strip to those fields: "Ledger approved £X · Rail settled £Y · drift £Z".
+  Green when `ok: true`, red when `false` (drift over a penny, or any `failed_calls`).
+- `failed_calls[]` is the actionable list — approved in governance but the rail never
+  settled. Show it when non-empty; it's the honest "something broke here" surface.
+- **Done when:** a reconciliation line shows ledger-total vs rail-total for the run,
+  goes green on a clean run, and surfaces any drift/failed call rather than hiding it.
 
 ---
 
@@ -113,3 +143,59 @@ builds to it.
 Don't hack around a missing field. Write the exact JSON shape you want on `/state`
 (or the endpoint you need) into a note and hand it over — backend publishes, you
 bind. That keeps your diffs in the dashboard and avoids merge pain in the core.
+
+---
+
+## Appendix — `/state` contract (captured 2026-06-26, real shapes)
+
+Poll `GET /state`. Top-level keys you bind to, with the new payment + reconciliation
+surfaces called out. Field values below are real, from an actual run.
+
+**Payment surfaces (new):**
+```jsonc
+"stripe_backend": "live-test",          // or "stub" — already drove your backend pill
+"supplier_payments": [                  // outbound (money the operator paid out)
+  { "payee": "aws", "amount": 220.0, "currency": "GBP",
+    "stripe_id": null,                  // real "tr_..." on a live transfer; null on stub/self-spend
+    "ref": "AWS-06", "failed": false }  // failed:true => rail errored, show as failed
+],
+"customer_payments": [                  // inbound (clients paying invoices) — these go LIVE
+  { "ref": "inv_1001", "amount": 140.0, "currency": "GBP",
+    "stripe_id": "pi_3Tma5cAUTWt2x6uq0ctw4PA2",  // real, retrievable in Stripe test dash
+    "failed": false }
+],
+"reconciliation": {                     // F5-lite — bind the recon strip straight to this
+  "ledger_spend": 85.0,                 // total the ledger approved to spend
+  "rail_settled": 85.0,                 // total that actually settled on the rail
+  "drift": 0.0,                         // abs(ledger_spend - rail_settled)
+  "ok": true,                           // true => drift<=£0.005 AND no failed calls
+  "failed_calls": []                    // [{op,payee,category,amount,currency,notes}] when broken
+}
+```
+
+**Reading `stripe_id` honestly (matters for the receipts task):**
+- `customer_payments[].stripe_id` → real `pi_` ids on a live run. Link + show.
+- `supplier_payments[].stripe_id` → real `tr_` id when a Connect transfer lands;
+  `null` on the stub.
+- **Self-spend** (the reinvest beat) runs through `provision_capability`, which is a
+  recorded stub even on the live rail, so its `stripe_id` stays `null`. Don't badge a
+  null-id row as "settled on Stripe" — badge it "recorded" / "test-mode". This is the
+  one place an over-claim would be caught by a judge, so render it precisely.
+
+**Timeline row** (`timeline[]`, the event feed — unchanged, still your main bind):
+```jsonc
+{ "t": 1782485296.48, "id": "01_revenue_in", "kind": "invoice_payment",
+  "decision": "approve", "reason": "Normal invoice payment reconciled …",
+  "refs": ["invoice_normal_paid"], "risk": 0.05, "layer": "rules",
+  "amount": 480.0, "currency": "GBP", "category": null,
+  "beat": "Revenue in: Brightwave pays their £480 invoice …",
+  "job": null, "margin_killer": false }   // job + margin_killer drive your grouping/hero
+```
+
+**Escalation card** (`awaiting_approval`, `null` until the run parks on the owner tap):
+when present it carries the `event_id` you POST to `/approve/{event_id}` or
+`/deny/{event_id}` (id in the URL path, not the body).
+
+**Nemotron count** (P0 task 1): not a top-level field — derive it from
+`business.jobs[].spends[].judgement.source` starting with `"nim:"`, per the snippet in
+task 1. `business` is `null` until `/run_operator` starts.

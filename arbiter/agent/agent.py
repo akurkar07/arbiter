@@ -119,7 +119,18 @@ class ArbiterAgent:
 
         if result.decision == DecisionKind.APPROVE:
             call = self._execute(event)
+            # Tag the rail call with the governance event id so the dashboard can
+            # join a paid spend row to its Stripe receipt. Additive: never alters
+            # the decision or the money, only the provenance record.
             if call is not None:
+                call.event_id = event_id
+            # A rail call that was attempted but errored is recorded with
+            # failed=True (the live glue records rather than raises so governance
+            # never crashes). Such a call did NOT settle, so it must not be
+            # reported as executed — that honesty is what reconciliation and a
+            # judge rely on. A stub call (no real id, failed=False) still counts:
+            # it is the demo's recorded money movement.
+            if call is not None and not getattr(call, "failed", False):
                 executed = True
                 stripe_id = call.stripe_id
 

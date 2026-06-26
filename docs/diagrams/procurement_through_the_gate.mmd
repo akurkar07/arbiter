@@ -1,0 +1,36 @@
+flowchart TB
+    subgraph evt["A spend decision enters the engine"]
+        direction TB
+        SRC1["Operator: job needs a tool to deliver"]
+        SRC2["NEW: Procurement scout proposes<br/>a cheaper equivalent from a BOUNDED catalog"]
+        SRC3["Hermes agent via MCP settle()"]
+    end
+
+    SRC1 --> GATE
+    SRC2 -->|"becomes a normal SELF_SPEND event<br/>NOT a privileged path"| GATE
+    SRC3 --> GATE
+
+    subgraph GATE["The single money door — settle()"]
+        direction TB
+        L1["Layer 1: 12 deterministic rules<br/>over-budget / off-goal / duplicate /<br/>payee-not-approved / instruction-override"]
+        L2["Layer 2: Nemotron 3 bounded judge<br/>advises on_goal + margin_ok, never decides"]
+        L3["Layer 3: phone escalation to owner"]
+        L1 -->|"clean"| L2
+        L2 -->|"ambiguous"| L3
+        L1 -->|"hard fail"| BLOCK
+        L2 -->|"contradicts numbers"| BLOCK
+    end
+
+    GATE --> APPROVE["APPROVE → Stripe RAK-scoped payout<br/>(2nd enforcement layer, server-side)"]
+    GATE --> BLOCK["BLOCK / REFUSE → no money moves"]
+    GATE --> ESCALATE["ESCALATE → owner one-tap"]
+
+    APPROVE --> LEDGER["Hash-chained ledger<br/>decision facts tamper-evident<br/>(display tags outside the hash)"]
+    BLOCK --> LEDGER
+    ESCALATE --> LEDGER
+
+    style SRC2 fill:#1a3a1a,stroke:#76b900,color:#fff
+    style GATE fill:#1a1a2e,stroke:#7c6fcc,color:#fff
+    style APPROVE fill:#0d2818,stroke:#2ea043,color:#fff
+    style BLOCK fill:#2d1418,stroke:#cc4444,color:#fff
+    style LEDGER fill:#1a1a1a,stroke:#888,color:#fff

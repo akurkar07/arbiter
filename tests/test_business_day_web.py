@@ -56,6 +56,41 @@ def test_state_exposes_allowlist_and_backend(client):
     assert snap["stripe_backend"] in ("stub", "live-test")
 
 
+def test_state_exposes_reconciliation_and_payment_surfaces(client):
+    """/state carries the F4-lite/F5-lite surfaces: customer_payments, a failed
+    flag on supplier_payments, and a reconciliation block — present from the
+    first poll so the dashboard can bind them before any run."""
+    snap = client.get("/state").json()
+    # The reconciliation block is always present and well-shaped.
+    rec = snap["reconciliation"]
+    assert set(rec) == {"ledger_spend", "rail_settled", "drift", "ok", "failed_calls"}
+    # Nothing has happened yet: clean, zero drift, no failed calls.
+    assert rec["ledger_spend"] == 0.0
+    assert rec["rail_settled"] == 0.0
+    assert rec["ok"] is True
+    assert rec["failed_calls"] == []
+    # Both payment surfaces exist (empty pre-run) for the dashboard to bind.
+    assert snap["customer_payments"] == []
+    assert isinstance(snap["supplier_payments"], list)
+
+
+def test_reconciliation_is_clean_after_a_stub_run(client):
+    """After the business day runs on the stub rail, ledger spend equals settled
+    rail outflow to the penny — the 'rail did what the ledger says' proof."""
+    _run_to_owner_tap(client)
+    # Release the parked tap so the run completes and spend is finalised.
+    state.escalation.resolve(DecisionKind.APPROVE)
+    if state.thread is not None:
+        state.thread.join(timeout=5)
+    rec = client.get("/state").json()["reconciliation"]
+    # On the stub rail every approved spend settles, so drift is zero and the
+    # settled total matches the ledger's approved spend.
+    assert rec["drift"] == 0.0
+    assert rec["ok"] is True
+    assert rec["rail_settled"] == rec["ledger_spend"]
+    assert rec["ledger_spend"] > 0.0  # the run actually paid suppliers
+
+
 def test_business_day_parks_on_the_bank_change(client):
     """The run streams six beats then genuinely blocks on the weak-evidence tap."""
     snap = _run_to_owner_tap(client)

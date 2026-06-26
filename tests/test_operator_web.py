@@ -52,14 +52,16 @@ def test_run_operator_exposes_business_rollup(client):
     business = snap["business"]
     assert business is not None
     # Real money math surfaced to the dashboard.
-    assert business["jobs_total"] == 4
-    assert business["jobs_completed"] == 3            # one fraud invoice rejected
-    assert business["revenue_booked"] == 350.0
-    assert business["cost_spent"] == 85.0
+    assert business["jobs_total"] == 5
+    assert business["jobs_completed"] == 4            # one fraud invoice rejected
+    assert business["revenue_booked"] == 480.0
+    assert business["cost_spent"] == 105.0
     assert business["waste_blocked"] == 60.0
     assert business["fraud_revenue_rejected"] == 200.0
-    assert business["net_profit"] == 265.0
-    assert business["balance"] == 315.0
+    assert business["net_profit"] == 375.0
+    assert business["balance"] == 425.0
+    # F3: the scout's disciplined sourcing saved real margin (£20 over £45).
+    assert business["sourcing_savings"] == 25.0
     # The invariant the whole pitch rests on.
     assert business["all_margins_protected"] is True
 

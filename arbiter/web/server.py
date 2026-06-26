@@ -29,10 +29,11 @@ from ..agent import ArbiterAgent
 from ..agent.nim_nemotron import select_nemotron
 from ..agent.spend_judge import select_spend_judge
 from ..business_day import business_day_events
-from ..ledger import EventLedger
+from ..ledger import EventLedger, reconcile
 from ..models import AgentEvent, EventKind, DecisionKind
 from ..metrics import reinvest_improvement
 from ..operator import BusinessOperator, demo_jobs
+from ..procurement import ProcurementScout, demo_catalog
 from ..policy.config import demo_policy_context
 from ..stripe_glue import select_stripe
 
@@ -203,6 +204,7 @@ class DemoState:
                 stripe=self.stripe,
                 spend_judge=self.spend_judge,
                 starting_balance=50.0,
+                scout=ProcurementScout(demo_catalog()),
             )
             self.thread = threading.Thread(target=self._run_operator, args=(step_delay,), daemon=True)
             self.thread.start()
@@ -242,8 +244,38 @@ class DemoState:
             "stripe_backend": getattr(self.stripe, "backend", "stub"),
             "supplier_payments": [
                 {"payee": c.payee, "amount": c.amount, "currency": c.currency,
-                 "stripe_id": c.stripe_id, "ref": c.ref}
+                 "stripe_id": c.stripe_id, "ref": c.ref, "failed": getattr(c, "failed", False)}
                 for c in self.stripe.calls if c.op == "pay_supplier"
+            ],
+            # Inbound money-in objects (real test-mode pi_... when live) so the
+            # dashboard can show the earn side with its Stripe ids, not just the
+            # payout side. Mirrors supplier_payments for the 'client paid' beat.
+            "customer_payments": [
+                {"ref": c.ref, "amount": c.amount, "currency": c.currency,
+                 "stripe_id": c.stripe_id, "failed": getattr(c, "failed", False)}
+                for c in self.stripe.calls if c.op == "create_payment"
+            ],
+            # F5-lite: prove the rail matches the ledger's approved spend, to the
+            # penny — or surface the gap. Consumes the B0 fix: a failed live call
+            # shows here as drift instead of a masked success.
+            "reconciliation": reconcile(self.ledger, self.stripe),
+            # Row-level settlement receipts: every approved spend that moved money
+            # through settle(), joined to the governance event id the dashboard
+            # also has on the timeline. Lets the reconciliation strip show
+            # "ledger spend == Stripe settled" per row, not just in aggregate.
+            "settlements": [
+                {
+                    "event_id": c.event_id,
+                    "kind": "vendor_payment" if c.op == "pay_supplier" else "self_spend",
+                    "amount": c.amount,
+                    "currency": c.currency,
+                    "stripe_id": c.stripe_id,
+                    "stripe_object": ("transfer" if c.op == "pay_supplier" else "capability"),
+                    "backend": getattr(self.stripe, "backend", "stub"),
+                    "failed": getattr(c, "failed", False),
+                }
+                for c in self.stripe.calls
+                if c.op in ("pay_supplier", "provision_capability") and c.event_id
             ],
             # insertion order matches dashboard/sample_state.json; the UI reverses
             # for display so the contract fixture and the live feed are identical.

@@ -73,6 +73,9 @@ const el = {
   verdictBanner: document.getElementById("verdict-banner"),
   reconcileSection: document.getElementById("reconcile-section"),
   reconcile: document.getElementById("reconcile"),
+  sourcingSection: document.getElementById("sourcing-section"),
+  sourcing: document.getElementById("sourcing"),
+  sourcingMeta: document.getElementById("sourcing-meta"),
   // detail
   detailHead: document.getElementById("detail-head"),
   detailEvent: document.getElementById("detail-event"),
@@ -558,6 +561,46 @@ function setStageActive(stage) {
   if (stage) el[STAGE_META[stage].elKey].classList.add("active");
 }
 
+/* ---------- smart sourcing strip (F3: the scout chose cheap, policy kept it honest) ---------- */
+
+function renderProcurement(state) {
+  if (!el.sourcing || !el.sourcingSection) return;
+  const b = state && state.business;
+  const sourcings = b && Array.isArray(b.sourcings) ? b.sourcings : [];
+  if (!sourcings.length) {
+    el.sourcingSection.classList.add("hidden");
+    return;
+  }
+  el.sourcingSection.classList.remove("hidden");
+
+  const savings = Number(b.sourcing_savings) || 0;
+  if (el.sourcingMeta) {
+    el.sourcingMeta.textContent = savings > 0
+      ? `Chose cheaper-but-good and saved ${money(savings)} of margin — a real number, not a claim`
+      : "The scout sources the cheapest catalog tool that meets the job's quality bar";
+  }
+
+  el.sourcing.innerHTML = sourcings
+    .map((s) => {
+      const chosen = s.chosen || {};
+      const premium = s.premium || null;
+      const saved = Number(s.savings_vs_premium) || 0;
+      // The model proposed something off-catalog/below-bar and the backend
+      // canonicalised it back to the safe baseline. That correction IS the moat.
+      const corrected = s.model_was_corrected === true;
+      const altLine = premium && Number(premium.price) > Number(chosen.price)
+        ? `chose <b>${money(chosen.price)}</b> over <b>${money(premium.price)}</b> (${escapeHtml(premium.name || premium.item_id || "premium")})`
+        : `sourced <b>${money(chosen.price)}</b> at quality ${chosen.quality != null ? Number(chosen.quality).toFixed(2) : "—"}`;
+      return `
+      <div class="sourcing-row${saved > 0 ? " is-saver" : ""}">
+        <div class="sc-name"><span class="sc-dot"></span><span class="sc-text"><b>${escapeHtml(chosen.name || chosen.item_id || "tool")}</b><small>${escapeHtml(s.capability || "")}${corrected ? " · model proposal corrected to safe baseline" : ""}</small></span></div>
+        <div class="sc-pick">${altLine}</div>
+        <div class="sc-save">${saved > 0 ? `<span class="sc-save-val">−${money(saved)}</span><span class="sc-save-k">saved</span>` : `<span class="sc-save-k">cheapest fit</span>`}</div>
+      </div>`;
+    })
+    .join("");
+}
+
 function bump(node) {
   if (!node) return;
   node.classList.remove("bump");
@@ -949,6 +992,7 @@ function render(state) {
   renderJobs(state.timeline || []);
   renderCounters(state.timeline || [], state);
   renderReconciliation(state);
+  renderProcurement(state);
   renderApproval(state);
   renderTable(state.timeline || []);
   const tl = state.timeline || [];
@@ -967,6 +1011,7 @@ function showIdle() {
   renderJobs([]);
   renderCounters([]);
   renderReconciliation({});
+  renderProcurement({});
   renderApproval({ awaiting_approval: null });
   lastTableKey = "__idle__";
   renderTable([]);
@@ -1161,6 +1206,7 @@ async function runDemo() {
   el.pcModel.textContent = nemotronJudgements(full).length || "0";
   renderVerdictBanner(full);
   renderReconciliation(full);
+  renderProcurement(full);
   let pendingState = null;
   try {
     pendingState = await fetchJson(SAMPLE_PENDING_URL);

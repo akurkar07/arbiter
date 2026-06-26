@@ -41,6 +41,7 @@ from .models import (
     PolicyResult,
     SpendContext,
 )
+from .procurement import ProcurementScout, SourcingRequest, SourcingResult
 from .stripe_glue import StripeGlue
 
 # Categories of tool the operator may buy to *deliver* client work. Distinct from
@@ -68,12 +69,20 @@ class SpendStatus(str, Enum):
 
 @dataclass(frozen=True)
 class ToolPurchase:
-    """A tool the agent considers buying to deliver a job."""
+    """A tool the agent considers buying to deliver a job.
+
+    ``capability`` is the optional F3 hook: when set, the operator can let the
+    procurement scout source the cheapest catalog tool delivering that capability
+    instead of buying this fixed tool. Left unset, the purchase is used verbatim
+    (the pre-F3 behaviour every existing job and test relies on).
+    """
 
     name: str
     category: str
     cost: float
     rationale: str = ""
+    capability: Optional[str] = None
+    min_quality: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -192,6 +201,10 @@ class BusinessRollup:
 
     starting_balance: float
     jobs: list[JobOutcome] = field(default_factory=list)
+    # F3: sourcing provenance for the run (set by the operator). Each entry is a
+    # SourcingResult.as_dict() — what the scout considered and chose. Default
+    # empty so pre-F3 runs serialise identically.
+    sourcings: list[dict] = field(default_factory=list)
 
     @property
     def revenue_booked(self) -> float:
@@ -221,6 +234,12 @@ class BusinessRollup:
     def all_margins_protected(self) -> bool:
         return all(j.margin_protected for j in self.jobs)
 
+    @property
+    def sourcing_savings(self) -> float:
+        """Total saved by sourcing the cheaper catalog fit over the priciest
+        considered alternative — the 'bought smart' headline number."""
+        return round(sum(s.get("savings_vs_premium", 0.0) for s in self.sourcings), 2)
+
     def as_dict(self) -> dict:
         return {
             "starting_balance": round(self.starting_balance, 2),
@@ -233,6 +252,8 @@ class BusinessRollup:
             "jobs_completed": sum(1 for j in self.jobs if j.revenue_booked),
             "jobs_total": len(self.jobs),
             "all_margins_protected": self.all_margins_protected,
+            "sourcing_savings": self.sourcing_savings,
+            "sourcings": self.sourcings,
             "jobs": [j.as_dict() for j in self.jobs],
         }
 
@@ -253,12 +274,20 @@ class BusinessOperator:
         spend_judge: Optional[SpendJudge] = None,
         starting_balance: float = 50.0,
         delivery_categories: frozenset[str] = DELIVERY_CATEGORIES,
+        scout: Optional[ProcurementScout] = None,
     ) -> None:
         self.agent = agent
         self.stripe = stripe
         self.spend_judge = spend_judge or MockSpendJudge()
         self.delivery_categories = delivery_categories
         self.rollup = BusinessRollup(starting_balance=starting_balance)
+        # F3: optional procurement scout. When present and a tool names a
+        # capability, the operator sources the cheapest catalog fit before the
+        # margin gate. When absent, behaviour is exactly pre-F3.
+        self.scout = scout
+        # Sourcing decisions made this run, surfaced on the rollup for the
+        # dashboard's "bought smart" panel. Provenance, not money movement.
+        self.sourcings: list[SourcingResult] = []
 
     # --- the loop ------------------------------------------------------------
 
@@ -315,13 +344,56 @@ class BusinessOperator:
         spent = 0.0
         for tool in job.tools:
             margin_safe_budget = job.revenue - job.protected_margin - spent
+            # F3: if this tool names a capability and a scout is configured, source
+            # the cheapest catalog tool delivering it. The sourced item replaces
+            # the placeholder tool, then runs the SAME margin gate below. Sourcing
+            # advises; the rules engine still decides.
+            tool = self._maybe_source(job, tool)
             outcome_spend = self._decide_spend(job, tool, margin_safe_budget, on_spend_refused)
             outcome.spends.append(outcome_spend)
             if outcome_spend.paid:
                 spent += tool.cost
 
         self.rollup.jobs.append(outcome)
+        # Keep the rollup's sourcing provenance in sync for the dashboard.
+        self.rollup.sourcings = [s.as_dict() for s in self.sourcings]
         return outcome
+
+    def _maybe_source(self, job: Job, tool: ToolPurchase) -> ToolPurchase:
+        """F3 sourcing seam. Returns a catalog-canonical tool when the scout can
+        source ``tool.capability`` cheaper; otherwise returns the tool unchanged.
+
+        The substituted ToolPurchase carries the catalog's canonical price,
+        category and name — never a model-supplied number — so the downstream
+        margin gate judges the real, owner-approved cost.
+        """
+        if self.scout is None or not tool.capability:
+            return tool
+        result = self.scout.source(
+            SourcingRequest(
+                capability=tool.capability,
+                job_id=job.job_id,
+                job_title=job.title,
+                min_quality=tool.min_quality,
+            )
+        )
+        self.sourcings.append(result)
+        if not result.sourced or result.chosen is None:
+            # Nothing safe to source: fall back to the declared tool so the job
+            # still runs through the gate (which may then refuse it). Never invent.
+            return tool
+        item = result.chosen
+        return ToolPurchase(
+            name=item.name,
+            category=item.category,
+            cost=item.price,
+            rationale=(
+                f"Scout sourced cheapest catalog fit for '{tool.capability}' "
+                f"(saved £{result.savings_vs_premium:.0f} vs premium)."
+            ),
+            capability=tool.capability,
+            min_quality=tool.min_quality,
+        )
 
     def _decide_spend(
         self,
@@ -507,6 +579,29 @@ def demo_jobs() -> list[Job]:
                     category="marketing",
                     cost=15.0,
                     rationale="Run ads for the client (not part of the job).",
+                ),
+            ),
+        ),
+        # 5. THE PROCUREMENT BEAT (F3): the job needs image generation. Rather than
+        # buy the first/fanciest tool, the scout sources the cheapest catalog tool
+        # that clears the quality bar - the £20 option over the £45 premium - and
+        # the ledger shows it *chose* to save margin. The cost below is a
+        # placeholder; the scout substitutes the catalog's canonical price.
+        Job(
+            job_id="job_05",
+            title="Marketing pack: AI banner generation",
+            revenue=130.0,
+            protected_margin=55.0,
+            customer_id="cust_agency",
+            invoice_ref="inv_1005",
+            tools=(
+                ToolPurchase(
+                    name="image_generation",
+                    category="design_assets",
+                    cost=0.0,  # placeholder; scout sets the canonical catalog price
+                    rationale="Generate the marketing banners.",
+                    capability="image_generation",
+                    min_quality=0.75,
                 ),
             ),
         ),

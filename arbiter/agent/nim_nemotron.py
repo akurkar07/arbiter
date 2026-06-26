@@ -15,7 +15,7 @@ NIM is OpenAI-compatible, so we drive it with the ``openai`` SDK pointed at
 
     NVIDIA_API_KEY   required; the nvapi-... key from build.nvidia.com
                      (NVIDIA_NIM_KEY is accepted as an alias)
-    NVIDIA_NIM_MODEL optional; defaults to nvidia/llama-3.3-nemotron-super-49b-v1
+    NVIDIA_NIM_MODEL optional; defaults to nvidia/nemotron-3-super-120b-a12b
 
 ``from_env`` returns ``None`` when no key is present, so the agent can fall
 back to ``MockNemotron`` and the demo never hard-fails offline.
@@ -31,7 +31,10 @@ from ..models import AgentEvent, PolicyResult
 from .nemotron import NemotronResult, _coerce
 from .spend_judge import _message_text
 
-DEFAULT_MODEL = "nvidia/llama-3.3-nemotron-super-49b-v1"
+# Current-generation Nemotron 3. The running deployment pins this via the
+# NVIDIA_NIM_MODEL env var (which always wins in from_env below); this default
+# exists so a fresh clone with only a key set still runs current-gen.
+DEFAULT_MODEL = "nvidia/nemotron-3-super-120b-a12b"
 NIM_BASE_URL = "https://integrate.api.nvidia.com/v1"
 
 _SYSTEM_PROMPT = (
