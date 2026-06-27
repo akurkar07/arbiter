@@ -164,6 +164,20 @@ a { color: inherit; text-decoration: none; }
 .policy-wide { grid-column: span 2; }
 .policy-actions { padding: 8px 18px 16px; display: flex; align-items: center; gap: 14px; justify-content: space-between; }
 .policy-actions p { margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.4; }
+.replay-body { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 14px; }
+.replay-controls { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+.replay-scenario { min-width: 280px; flex: 1; }
+.replay-scenario select { color: var(--text); background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 11px; font: inherit; font-size: 13px; }
+.replay-result { color: var(--muted); background: rgba(255,255,255,0.025); border: 1px solid var(--line); border-radius: 12px; padding: 13px; font-size: 13px; }
+.replay-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.replay-card { background: var(--surface-2); border: 1px solid var(--line); border-radius: 11px; padding: 12px; }
+.replay-label { display: block; margin-bottom: 8px; color: var(--faint); font-size: 10px; text-transform: uppercase; letter-spacing: 0.7px; font-weight: 800; }
+.replay-verdict { display: inline-flex; border-radius: 999px; padding: 4px 9px; font-size: 11px; font-weight: 900; letter-spacing: 0.5px; }
+.replay-approve { color: var(--approve); background: var(--approve-dim); }
+.replay-block { color: var(--block); background: var(--block-dim); }
+.replay-escalate { color: var(--escalate); background: var(--escalate-dim); }
+.replay-card p { margin: 9px 0 0; line-height: 1.45; color: var(--muted); }
+.replay-note { margin-top: 10px; color: var(--faint); font-size: 12px; }
 
 /* ---------- Stats row ---------- */
 .stats { display: grid; grid-template-columns: repeat(4, 1fr) 1.5fr; gap: 12px; margin-bottom: 16px; }
@@ -386,6 +400,7 @@ a { color: inherit; text-decoration: none; }
   .policy-grid { grid-template-columns: 1fr; }
   .policy-wide { grid-column: auto; }
   .policy-actions { align-items: flex-start; flex-direction: column; }
+  .replay-columns { grid-template-columns: 1fr; }
   .pipeline { flex-direction: column; } .pipe-arrow { transform: rotate(90deg); }
 }
 

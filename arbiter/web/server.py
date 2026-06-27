@@ -19,11 +19,12 @@ from __future__ import annotations
 import threading
 import time
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from ..agent import ArbiterAgent
 from ..agent.nim_nemotron import select_nemotron
@@ -31,6 +32,7 @@ from ..agent.spend_judge import select_spend_judge
 from ..business_day import business_day_events
 from ..ledger import EventLedger, reconcile
 from ..models import AgentEvent, EventKind, DecisionKind
+from ..policy import evaluate
 from ..agent.agent import TRUST_MODES
 from ..metrics import reinvest_improvement
 from ..operator import BusinessOperator, demo_jobs
@@ -350,6 +352,60 @@ class PolicyRequest(BaseModel):
     detail_change_evidence_threshold: float | None = None
 
 
+class PolicyReplayRequest(BaseModel):
+    """Run an event against current policy and proposed policy without side effects."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    event: dict[str, Any]
+    policy: dict[str, Any] = Field(default_factory=dict)
+
+
+def _policy_result_payload(result) -> dict:
+    return {
+        "decision": result.decision.value,
+        "reason": result.reason,
+        "policy_refs": list(result.policy_refs),
+        "risk_score": result.risk_score,
+        "decided_by": result.decided_by.value,
+    }
+
+
+def _float_or_none(payload: dict[str, Any], key: str) -> float | None:
+    if payload.get(key) is None:
+        return None
+    if isinstance(payload[key], bool):
+        raise ValueError(f"{key} must be a number")
+    try:
+        return float(payload[key])
+    except (TypeError, ValueError):
+        raise ValueError(f"{key} must be a number")
+
+
+def _event_from_payload(payload: dict[str, Any]) -> AgentEvent:
+    try:
+        kind = EventKind(payload.get("kind"))
+    except ValueError:
+        raise ValueError(f"unknown event kind {payload.get('kind')!r}")
+    try:
+        vendor_history_count = int(payload.get("vendor_history_count", 0) or 0)
+    except (TypeError, ValueError):
+        raise ValueError("vendor_history_count must be an integer")
+    return AgentEvent(
+        kind=kind,
+        amount=_float_or_none(payload, "amount"),
+        currency=payload.get("currency") or "GBP",
+        vendor_id=payload.get("vendor_id"),
+        vendor_known=bool(payload.get("vendor_known", False)),
+        vendor_history_count=vendor_history_count,
+        invoice_amount=_float_or_none(payload, "invoice_amount"),
+        detail_change_evidence=_float_or_none(payload, "detail_change_evidence") or 0.0,
+        ref=payload.get("ref"),
+        message=payload.get("message") or "",
+        category=payload.get("category"),
+    )
+
+
 @app.post("/trust_mode")
 def set_trust_mode(req: TrustModeRequest) -> JSONResponse:
     if req.mode not in TRUST_MODES:
@@ -385,6 +441,42 @@ def set_policy(req: PolicyRequest) -> JSONResponse:
         trust_mode = state.agent.trust_mode
         state.reset(trust_mode=trust_mode)
     return JSONResponse({"policy": state.owner_policy, "trust_mode": state.agent.trust_mode})
+
+
+@app.post("/policy/replay")
+def replay_policy(req: PolicyReplayRequest) -> JSONResponse:
+    """What-if a money event against proposed owner policy, with no ledger/rail mutation."""
+    if not isinstance(req.event, dict):
+        return JSONResponse({"error": "event must be an object"}, status_code=422)
+    try:
+        event = _event_from_payload(req.event)
+    except (TypeError, ValueError) as exc:
+        return JSONResponse({"error": str(exc)}, status_code=422)
+
+    if not isinstance(req.policy, dict):
+        return JSONResponse({"error": "policy must be an object"}, status_code=422)
+    raw_policy = {**state.owner_policy, **req.policy}
+    try:
+        current_ctx = policy_context_from_dict(state.owner_policy)
+        replay_policy = normalize_policy_config(raw_policy)
+        replay_ctx = policy_context_from_dict(replay_policy)
+    except PolicyConfigError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=422)
+
+    baseline = evaluate(event, current_ctx)
+    replay = evaluate(event, replay_ctx)
+    baseline_payload = _policy_result_payload(baseline)
+    replay_payload = _policy_result_payload(replay)
+    return JSONResponse({
+        "event": req.event,
+        "current_policy": state.owner_policy,
+        "replay_policy": replay_policy,
+        "baseline": baseline_payload,
+        "replay": replay_payload,
+        "changed": baseline_payload != replay_payload,
+        "moved_money": False,
+        "mutated_state": False,
+    })
 
 
 @app.post("/reset")

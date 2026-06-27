@@ -47,6 +47,10 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="8" cy="7" r="1.4" fill="currentColor" stroke="none"/><circle cx="14" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="10" cy="17" r="1.4" fill="currentColor" stroke="none"/></svg>
           <span>Per-job ledger</span>
         </a>
+        <a class="nav-item" data-scroll="policy-section" href="#/overview">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 4h14v16H5z"/><path d="M8 8h8M8 12h5M8 16h7"/></svg>
+          <span>Policy lab</span>
+        </a>
         <a class="nav-item" data-scroll="engine-section" href="#/overview">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="6" r="2.4"/><circle cx="18" cy="18" r="2.4"/><path d="M8.1 11l7.8-4M8.1 13l7.8 4"/></svg>
           <span>Spend engine</span>
@@ -188,6 +192,30 @@
           <div class="policy-actions">
             <button id="policy-save" class="btn btn-outline">Save owner policy</button>
             <p id="policy-summary">Arbiter may only spend inside these owner-defined rules.</p>
+          </div>
+        </section>
+
+        <!-- Policy replay -->
+        <section class="panel replay-panel" id="policy-replay-section">
+          <div class="panel-head">
+            <h3>Policy replay / what-if</h3>
+            <span class="panel-meta" id="replay-status">No money moves here</span>
+          </div>
+          <div class="replay-body">
+            <div class="replay-controls">
+              <label class="policy-field replay-scenario">
+                <span>Scenario</span>
+                <select id="replay-scenario">
+                  <option value="aws_payment">Approved supplier payment: AWS £42</option>
+                  <option value="unknown_payee">Unapproved supplier payment: ghost_vendor £42</option>
+                  <option value="margin_spend">Self-spend: marketing tool £60</option>
+                </select>
+              </label>
+              <button id="replay-run" class="btn btn-outline">Replay against policy form</button>
+            </div>
+            <div class="replay-result" id="replay-result">
+              Edit the owner policy above, then replay a money event before saving it.
+            </div>
           </div>
         </section>
 
