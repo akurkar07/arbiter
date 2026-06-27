@@ -1,6 +1,6 @@
 # Arbiter Feature Notes — 2026-06-27
 
-Purpose: working feature/design notes for Ben + Atlas + Alex while shaping the Arbiter demo. This file is intentionally lightweight: add ideas here first, then promote only the strongest ones into implementation tickets.
+Purpose: working feature/design notes for Ben + Alex while shaping the Arbiter demo. This file is intentionally lightweight: add ideas here first, then promote only the strongest ones into implementation tickets.
 
 ## Current priority: F6-lite — Owner Policy Setup
 
@@ -261,7 +261,7 @@ This should expose policy evidence already produced by the engine. Do not build 
 
 ## Code understanding checkpoint — money path before more feature creep
 
-Ben is still learning how Arbiter works because Helios built most of it. Before adding more features, keep this code path visible:
+Before adding more features, keep this code path visible:
 
 ```text
 BusinessOperator.run_job(job)
@@ -849,11 +849,11 @@ Rule Pack and Concurrency-safe Ledger are important, but likely better as archit
 Taylor is not just asking "does it work?". She is asking whether Arbiter resembles real financial control infrastructure: rules, validation, concurrency safety, and auditability. That is exactly where the project is strongest if we show it clearly.
 
 
-## Working task split — Ben / Alex / Atlas
+## Working task split — Ben / Alex
 
-Updated from Ben at 2026-06-27 01:25: Helios has been taken off hackathon work to focus on Kalshi bot work. Arbiter execution is now Ben + Atlas + Alex. We are aiming for both a live-clickable dashboard demo and a polished recorded demo.
+Updated from Ben at 2026-06-27 01:25: Arbiter execution is now Ben + Alex. We are aiming for both a live-clickable dashboard demo and a polished recorded demo.
 
-### Ben + Atlas
+### Ben
 Own the product spine, demo narrative, backend safety review, and final demo truth:
 
 - decide which features make the final cut
@@ -877,10 +877,9 @@ Can own frontend and selected backend implementation, especially where UI needs 
 - small API/state-shape changes if required
 - dashboard polish where it connects to real state
 
-Alex is not limited to motion design. He can implement backend support where it directly serves the UI/features. Safety-critical money-door changes still need Ben + Atlas review.
+Alex is not limited to motion design. He can implement backend support where it directly serves the UI/features. Safety-critical money-door changes still need Ben's review.
 
-### Atlas
-Hold architecture consistency:
+### Architecture guardrails
 
 - no second money door
 - no AI-generated fake explanations
@@ -888,10 +887,10 @@ Hold architecture consistency:
 - verify claims before final demo/writeup
 
 ### Motion design ownership
-Motion design is Ben + Atlas-led:
+Motion design is Ben-led:
 
 - Alex may provide UI surfaces/assets
-- Ben + Atlas decide the sequence, pacing, labels, and story beats
+- Ben decides the sequence, pacing, labels, and story beats
 - final edit should emphasise: owner control, deterministic policy, audit evidence, safe autonomy, and rail truth
 
 

@@ -1,7 +1,7 @@
 # Arbiter — Alex Feature + UI Build Plan
 
 Date: 2026-06-27
-Owner: Ben + Atlas
+Owner: Ben
 For: Alex
 
 ## Why this doc exists
@@ -12,7 +12,7 @@ We had a proper product/architecture session tonight. The project has moved from
 
 The demo needs to prove that in the UI.
 
-This doc is the plan for the features Alex can build or help build. Alex is not limited to frontend. Backend glue is fine where it directly serves the UI. Helios has been taken off the hackathon to focus on Kalshi bot work, so safety-critical money-door changes are owned/reviewed by Ben + Atlas before merge.
+This doc is the plan for the features Alex can build or help build. Alex is not limited to frontend. Backend glue is fine where it directly serves the UI. Safety-critical money-door changes are owned/reviewed by Ben before merge.
 
 Current dashboard is simple static HTML/CSS/JS:
 
@@ -208,7 +208,7 @@ paused
 
 Safety-critical enforcement should be backend-side, ideally inside or immediately adjacent to `settle()` so there is still one money door.
 
-Alex can build the UI and simple state plumbing. If enforcement touches `settle()`, Ben + Atlas must review before merge.
+Alex can build the UI and simple state plumbing. If enforcement touches `settle()`, Ben must review before merge.
 
 ## Acceptance criteria
 
@@ -551,7 +551,7 @@ This is useful for Policy Replay.
 
 Strong idea, but backend-heavy if done properly.
 
-Demo-lite UI only if Ben + Atlas can support the backend safely:
+Demo-lite UI only if the backend can support it safely:
 
 ```text
 Two spend requests hit same job budget.
@@ -620,7 +620,7 @@ The UI should have clean visual states for:
 - red-team block
 - rail truth / audit proof
 
-Ben + Atlas will handle final motion direction/edit, but Alex's UI should expose these states clearly.
+Ben will handle final motion direction/edit, but Alex's UI should expose these states clearly.
 
 ---
 
@@ -673,7 +673,7 @@ Make the flow smooth enough for screen recording.
 We are aiming for both:
 
 1. **Live-clickable demo** — the dashboard can run from the backend and show real state transitions.
-2. **Polished recorded demo** — Ben + Atlas use the live UI states to produce the final motion/story cut.
+2. **Polished recorded demo** — Ben uses the live UI states to produce the final motion/story cut.
 
 This means Alex's UI should expose clean, recordable states, not just final static cards. If a feature cannot be made fully live in time, label it honestly as replay/simulation/roadmap rather than implying execution truth.
 
@@ -694,7 +694,7 @@ This means Alex's UI should expose clean, recordable states, not just final stat
 
 Ben is not just waiting around.
 
-Ben + Atlas own:
+Ben owns:
 
 - final product story
 - demo runline
@@ -712,11 +712,11 @@ Arbiter is not an AI with a Stripe key. It is a controlled money operator. The o
 
 ---
 
-# What Ben + Atlas own/check
+# What Ben owns/checks
 
-Helios is off the hackathon now so he can focus on Kalshi bot work. Ben + Atlas own backend safety review for this push.
+Ben owns backend safety review for this push.
 
-Ben + Atlas should handle or review:
+Ben should handle or review:
 
 - autonomy-mode enforcement if it touches `settle()`
 - policy replay backend endpoint if added
