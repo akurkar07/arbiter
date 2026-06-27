@@ -56,6 +56,7 @@ class EventLedger:
         result: PolicyResult,
         event_id: str,
         demo_beat: str = "",
+        book_money: bool | None = None,
     ) -> LedgerEntry:
         entry = LedgerEntry(
             timestamp=time.time(),
@@ -72,13 +73,17 @@ class EventLedger:
             demo_beat=demo_beat,
         )
         self.entries.append(entry)
-        # bookkeeping for the earn / spend / reinvest loop
-        if event.kind.value == "invoice_payment" and result.decision == DecisionKind.APPROVE:
+        should_book_money = result.decision == DecisionKind.APPROVE if book_money is None else book_money
+        # bookkeeping for the earn / spend / reinvest loop. In plain decide()
+        # calls, an APPROVE still books as before. In settle(), callers pass
+        # book_money from the actual rail result so monitor/paused approvals do
+        # not pretend money moved.
+        if should_book_money and event.kind.value == "invoice_payment":
             self._earnings += event.amount or 0.0
         # Money out: both the agent's own self-spend AND an approved supplier
-        # payment (the AP-autopilot's actual job) count as spend. Only approved
-        # payments move money — blocks/escalations never touch the spend total.
-        if event.kind.value in ("self_spend", "vendor_payment") and result.decision == DecisionKind.APPROVE:
+        # payment (the AP-autopilot's actual job) count as spend only when the
+        # settlement path says money actually moved / was recorded.
+        if should_book_money and event.kind.value in ("self_spend", "vendor_payment"):
             self._spend += event.amount or 0.0
         return entry
 

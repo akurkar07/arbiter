@@ -73,6 +73,15 @@
           <span class="crumb">Overview</span>
         </nav>
         <div class="controls">
+          <label class="trust-control" title="Controls whether approved policy decisions can execute automatically">
+            <span>Trust</span>
+            <select id="trust-mode">
+              <option value="monitor_only">Monitor only</option>
+              <option value="approval_required">Approval required</option>
+              <option value="policy_autopilot" selected>Policy autopilot</option>
+              <option value="paused">Paused</option>
+            </select>
+          </label>
           <button id="run-demo" class="btn btn-primary">▶ Run demo</button>
           <button id="toggle-live" class="btn btn-quiet" title="Connect to a live backend at /state">Go live</button>
         </div>

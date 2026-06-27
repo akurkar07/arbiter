@@ -38,6 +38,9 @@ from .nemotron import NemotronLayer, MockNemotron, to_policy_result
 from .escalation import EscalationHandler, ConsoleEscalation, escalate_result
 
 
+TRUST_MODES = ("monitor_only", "approval_required", "policy_autopilot", "paused")
+
+
 class ArbiterAgent:
     """The self-governing accountant.
 
@@ -61,8 +64,20 @@ class ArbiterAgent:
         # real money; select_stripe() swaps in the live test-mode rail when a key
         # is present. No other object in the system gets a Stripe handle.
         self.stripe = stripe or StripeGlue()
+        self.trust_mode = "policy_autopilot"
 
-    def decide(self, event: AgentEvent, event_id: str, demo_beat: str = "") -> PolicyResult:
+    def set_trust_mode(self, mode: str) -> None:
+        """Set the execution posture for approved decisions.
+
+        Trust modes never widen policy. They only decide whether an already
+        APPROVED policy verdict may execute immediately, must wait for owner
+        confirmation, or is recorded without execution.
+        """
+        if mode not in TRUST_MODES:
+            raise ValueError(f"unknown trust mode {mode!r}")
+        self.trust_mode = mode
+
+    def decide(self, event: AgentEvent, event_id: str, demo_beat: str = "", *, record: bool = True) -> PolicyResult:
         """Run an event through the 3 layers and record the outcome — no money moves.
 
         This is pure judgment: the engine's verdict, recorded to the ledger. It
@@ -87,18 +102,10 @@ class ArbiterAgent:
             if owner != DecisionKind.ESCALATE:
                 result = escalate_result(event, result, owner)
 
-        # Record + bookkeeping.
-        self.ledger.record(event, result, event_id, demo_beat)
-
-        # If this was an approved self-spend, decrement the remaining budget.
-        if event.kind.value == "self_spend" and result.decision == DecisionKind.APPROVE:
-            self.ctx.budget_remaining -= event.amount or 0.0
-
-        # If this was an approved invoice payment, seed the fingerprint so a
-        # replayed copy is caught as a duplicate next time.
-        if event.kind.value in ("invoice_payment", "vendor_payment") and result.decision == DecisionKind.APPROVE:
-            if event.vendor_id and event.amount is not None and event.ref:
-                self.ctx.recent_payment_fingerprints.add((event.vendor_id, event.amount, event.ref))
+        if record:
+            # Record + bookkeeping.
+            self.ledger.record(event, result, event_id, demo_beat)
+            self._book_context_after_money(event, result.decision == DecisionKind.APPROVE)
 
         return result
 
@@ -112,27 +119,66 @@ class ArbiterAgent:
         money moved. Because the agent owns the Stripe handle, there is no way for
         a caller to reach APPROVE-then-pay without coming through here.
         """
-        result = self.decide(event, event_id=event_id, demo_beat=demo_beat)
+        result = self.decide(event, event_id=event_id, demo_beat=demo_beat, record=False)
 
         executed = False
         stripe_id: Optional[str] = None
 
         if result.decision == DecisionKind.APPROVE:
-            call = self._execute(event)
-            # Tag the rail call with the governance event id so the dashboard can
-            # join a paid spend row to its Stripe receipt. Additive: never alters
-            # the decision or the money, only the provenance record.
-            if call is not None:
-                call.event_id = event_id
-            # A rail call that was attempted but errored is recorded with
-            # failed=True (the live glue records rather than raises so governance
-            # never crashes). Such a call did NOT settle, so it must not be
-            # reported as executed — that honesty is what reconciliation and a
-            # judge rely on. A stub call (no real id, failed=False) still counts:
-            # it is the demo's recorded money movement.
-            if call is not None and not getattr(call, "failed", False):
-                executed = True
-                stripe_id = call.stripe_id
+            if self.trust_mode == "monitor_only":
+                result = PolicyResult(
+                    decision=result.decision,
+                    reason=f"[monitor only] {result.reason}",
+                    policy_refs=list(result.policy_refs) + ["trust_monitor_only"],
+                    risk_score=result.risk_score,
+                    decided_by=result.decided_by,
+                )
+            elif self.trust_mode == "paused":
+                result = PolicyResult(
+                    decision=result.decision,
+                    reason=f"[paused] {result.reason}",
+                    policy_refs=list(result.policy_refs) + ["trust_paused"],
+                    risk_score=result.risk_score,
+                    decided_by=result.decided_by,
+                )
+            else:
+                if self.trust_mode == "approval_required":
+                    gate = PolicyResult(
+                        decision=DecisionKind.ESCALATE,
+                        reason="Trust mode requires owner approval before execution.",
+                        policy_refs=list(result.policy_refs) + ["trust_approval_required"],
+                        risk_score=result.risk_score,
+                        decided_by=DecisionLayer.ESCALATE,
+                    )
+                    owner = self.escalation.request_approval(event, gate)
+                    if owner != DecisionKind.APPROVE:
+                        result = PolicyResult(
+                            decision=DecisionKind.BLOCK,
+                            reason="[owner denied execution] Approved by policy, but owner denied execution.",
+                            policy_refs=list(result.policy_refs) + ["trust_approval_denied"],
+                            risk_score=result.risk_score,
+                            decided_by=DecisionLayer.ESCALATE,
+                        )
+
+                if result.decision == DecisionKind.APPROVE:
+                    call = self._execute(event)
+                    # Tag the rail call with the governance event id so the dashboard can
+                    # join a paid spend row to its Stripe receipt. Additive: never alters
+                    # the decision or the money, only the provenance record.
+                    if call is not None:
+                        call.event_id = event_id
+                    # A rail call that was attempted but errored is recorded with
+                    # failed=True (the live glue records rather than raises so governance
+                    # never crashes). Such a call did NOT settle, so it must not be
+                    # reported as executed — that honesty is what reconciliation and a
+                    # judge rely on. A stub call (no real id, failed=False) still counts:
+                    # it is the demo's recorded money movement.
+                    if call is not None and not getattr(call, "failed", False):
+                        executed = True
+                        stripe_id = call.stripe_id
+
+        self.ledger.record(event, result, event_id, demo_beat, book_money=executed)
+        self._book_context_after_money(event, executed)
 
         return SettlementResult(
             decision=result.decision,
@@ -145,6 +191,20 @@ class ArbiterAgent:
             stripe_backend=getattr(self.stripe, "backend", "stub"),
             event_id=event_id,
         )
+
+    def _book_context_after_money(self, event: AgentEvent, moved_money: bool) -> None:
+        """Update spend budgets / duplicate fingerprints only when money moved.
+
+        A policy approval is permission. Trust controls can still prevent
+        execution, so execution-sensitive context must follow settlement truth.
+        """
+        if not moved_money:
+            return
+        if event.kind.value == "self_spend":
+            self.ctx.budget_remaining -= event.amount or 0.0
+        if event.kind.value in ("invoice_payment", "vendor_payment"):
+            if event.vendor_id and event.amount is not None and event.ref:
+                self.ctx.recent_payment_fingerprints.add((event.vendor_id, event.amount, event.ref))
 
     def _execute(self, event: AgentEvent):
         """Perform the Stripe operation for an APPROVED event. Internal only.

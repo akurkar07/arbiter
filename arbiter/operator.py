@@ -62,6 +62,7 @@ RefusalHook = Callable[[SpendContext, PolicyResult], None]
 
 class SpendStatus(str, Enum):
     PAID = "paid"
+    RECORDED = "recorded"
     REFUSED_MARGIN = "refused_margin"
     REFUSED_OFFGOAL = "refused_offgoal"
     REFUSED_OTHER = "refused_other"
@@ -445,13 +446,26 @@ class BusinessOperator:
         row_id = f"{job.job_id}:spend:{tool.name}"
         self.agent.ledger.enrich(row_id, job=job.title, margin_killer=False)
 
-        if result.decision == DecisionKind.APPROVE:
+        if result.moved_money:
             # Money already moved inside settle() — the single door decides AND
             # executes, so there's no separate pay line that could fire without a
             # matching APPROVE (or be skipped after one).
             return SpendOutcome(
                 tool=tool,
                 status=SpendStatus.PAID,
+                decision=result.decision.value,
+                reason=result.reason,
+                margin_safe_budget=margin_safe_budget,
+                judgement=judgement,
+            )
+
+        if result.decision == DecisionKind.APPROVE:
+            # Policy approved it, but a stricter trust mode (monitor-only / paused)
+            # prevented execution. Record the approval without pretending the job
+            # bought the tool or spent money.
+            return SpendOutcome(
+                tool=tool,
+                status=SpendStatus.RECORDED,
                 decision=result.decision.value,
                 reason=result.reason,
                 margin_safe_budget=margin_safe_budget,
