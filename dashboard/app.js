@@ -57,6 +57,10 @@ const el = {
   policyPayees: document.getElementById("policy-payees"),
   policySave: document.getElementById("policy-save"),
   policySummary: document.getElementById("policy-summary"),
+  replayStatus: document.getElementById("replay-status"),
+  replayScenario: document.getElementById("replay-scenario"),
+  replayRun: document.getElementById("replay-run"),
+  replayResult: document.getElementById("replay-result"),
   stageRules: document.getElementById("stage-rules"),
   stageModel: document.getElementById("stage-model"),
   stageOwner: document.getElementById("stage-owner"),
@@ -407,6 +411,12 @@ function setPolicyStatus(text, kind = "idle") {
   el.policyStatus.className = `panel-meta policy-status-${kind}`;
 }
 
+function setReplayStatus(text, kind = "idle") {
+  if (!el.replayStatus) return;
+  el.replayStatus.textContent = text;
+  el.replayStatus.className = `panel-meta policy-status-${kind}`;
+}
+
 function isPolicyFieldFocused() {
   return [
     el.policySpendCap,
@@ -456,6 +466,87 @@ async function savePolicy() {
     return true;
   } catch (err) {
     setPolicyStatus(err.message || "Policy save failed", "error");
+    return false;
+  }
+}
+
+const REPLAY_SCENARIOS = {
+  aws_payment: {
+    kind: "vendor_payment",
+    vendor_id: "aws",
+    amount: 42,
+    invoice_amount: 42,
+    vendor_known: true,
+    vendor_history_count: 12,
+    ref: "aws-hosting-042",
+    message: "AWS hosting invoice",
+  },
+  unknown_payee: {
+    kind: "vendor_payment",
+    vendor_id: "ghost_vendor",
+    amount: 42,
+    invoice_amount: 42,
+    vendor_known: true,
+    vendor_history_count: 3,
+    ref: "ghost-042",
+    message: "Supplier payment request",
+  },
+  margin_spend: {
+    kind: "self_spend",
+    amount: 60,
+    category: "marketing",
+    ref: "ad-campaign-tool",
+    message: "Buy an ad campaign tool for the job",
+  },
+};
+
+function verdictMini(v) {
+  const cls = v === "approve" ? "approve" : v === "block" ? "block" : "escalate";
+  return `<span class="replay-verdict replay-${cls}">${escapeHtml(String(v).toUpperCase())}</span>`;
+}
+
+function renderReplayResult(body) {
+  if (!el.replayResult) return;
+  const before = body.baseline || {};
+  const after = body.replay || {};
+  const changed = body.changed ? "changed" : "unchanged";
+  el.replayResult.innerHTML = `
+    <div class="replay-columns">
+      <div class="replay-card">
+        <span class="replay-label">Current policy</span>
+        ${verdictMini(before.decision || "-")}
+        <p>${escapeHtml(before.reason || "No result")}</p>
+      </div>
+      <div class="replay-card replay-card-after">
+        <span class="replay-label">Policy form</span>
+        ${verdictMini(after.decision || "-")}
+        <p>${escapeHtml(after.reason || "No result")}</p>
+      </div>
+    </div>
+    <div class="replay-note">Replay ${changed}. Ledger unchanged. Rail untouched.</div>`;
+}
+
+async function runReplay() {
+  const scenario = REPLAY_SCENARIOS[(el.replayScenario && el.replayScenario.value) || "aws_payment"];
+  const policy = currentPolicyFromForm();
+  if (mode !== "live") {
+    setReplayStatus("Replay needs live backend", "error");
+    if (el.replayResult) el.replayResult.textContent = "Switch to live mode to run policy replay against the backend engine.";
+    return false;
+  }
+  try {
+    const res = await fetch("/policy/replay", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event: scenario, policy }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || `policy replay failed (${res.status})`);
+    renderReplayResult(body);
+    setReplayStatus(body.changed ? "Replay changed the verdict" : "Replay verdict unchanged", body.changed ? "staged" : "saved");
+    return true;
+  } catch (err) {
+    setReplayStatus(err.message || "Policy replay failed", "error");
     return false;
   }
 }
@@ -1424,6 +1515,10 @@ el.toggleLive.addEventListener("click", () => {
 
 if (el.policySave) {
   el.policySave.addEventListener("click", savePolicy);
+}
+
+if (el.replayRun) {
+  el.replayRun.addEventListener("click", runReplay);
 }
 
 if (el.trustMode) {
