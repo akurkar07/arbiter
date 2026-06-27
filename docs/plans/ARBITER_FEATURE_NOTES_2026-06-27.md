@@ -849,18 +849,19 @@ Rule Pack and Concurrency-safe Ledger are important, but likely better as archit
 Taylor is not just asking "does it work?". She is asking whether Arbiter resembles real financial control infrastructure: rules, validation, concurrency safety, and auditability. That is exactly where the project is strongest if we show it clearly.
 
 
-## Working task split — Ben / Alex / Atlas / Helios
+## Working task split — Ben / Alex / Atlas
 
-Updated from Ben: Alex can do backend work too. Motion design/demo edit will be handled by Ben + Atlas, not delegated entirely to Alex.
+Updated from Ben at 2026-06-27 01:25: Helios has been taken off hackathon work to focus on Kalshi bot work. Arbiter execution is now Ben + Atlas + Alex. We are aiming for both a live-clickable dashboard demo and a polished recorded demo.
 
 ### Ben + Atlas
-Own the product spine and demo narrative:
+Own the product spine, demo narrative, backend safety review, and final demo truth:
 
-- decide which 6 features make the cut
+- decide which features make the final cut
 - define the story arc and demo script
 - map policy rules to plain-English product meaning
 - prepare Taylor-facing explanation
 - motion design direction and final edit planning
+- review anything touching `settle()`, execution, policy replay, red-team scenarios, rail reconciliation, or audit truth
 - ensure the demo does not imply capabilities Arbiter does not have
 
 ### Alex
@@ -868,21 +869,15 @@ Can own frontend and selected backend implementation, especially where UI needs 
 
 - Owner Policy Setup UI
 - Decision Receipt cards
+- Trust Controls UI + safe state plumbing
 - Audit / Evidence Panel UI
-- backend glue needed to expose policy/receipt/audit data
-- small API shape changes if required
+- Policy Replay UI/backend glue if cheap
+- Red-Team scenario UI/backend glue if cheap
+- Rail Reconciliation panel
+- small API/state-shape changes if required
 - dashboard polish where it connects to real state
 
-Alex is not limited to motion design. He can implement backend support where it directly serves the UI/features.
-
-### Helios
-Use for deeper backend/safety-critical implementation or verification:
-
-- `settle()` / money-door changes
-- autonomy-mode enforcement
-- policy engine changes
-- tests for no bypass / no accidental execution
-- concurrency/idempotency notes if implemented
+Alex is not limited to motion design. He can implement backend support where it directly serves the UI/features. Safety-critical money-door changes still need Ben + Atlas review.
 
 ### Atlas
 Hold architecture consistency:
@@ -897,7 +892,7 @@ Motion design is Ben + Atlas-led:
 
 - Alex may provide UI surfaces/assets
 - Ben + Atlas decide the sequence, pacing, labels, and story beats
-- final edit should emphasise: owner control, deterministic policy, audit evidence, and safe autonomy
+- final edit should emphasise: owner control, deterministic policy, audit evidence, safe autonomy, and rail truth
 
 
 ## Killer feature candidate — Policy Replay / What-If Simulator

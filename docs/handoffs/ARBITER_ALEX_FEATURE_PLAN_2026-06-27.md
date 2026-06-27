@@ -12,7 +12,7 @@ We had a proper product/architecture session tonight. The project has moved from
 
 The demo needs to prove that in the UI.
 
-This doc is the plan for the features Alex can build or help build. Alex is not limited to frontend. Backend glue is fine where it directly serves the UI, but safety-critical money-door changes should be checked with Atlas/Helios.
+This doc is the plan for the features Alex can build or help build. Alex is not limited to frontend. Backend glue is fine where it directly serves the UI. Helios has been taken off the hackathon to focus on Kalshi bot work, so safety-critical money-door changes are owned/reviewed by Ben + Atlas before merge.
 
 Current dashboard is simple static HTML/CSS/JS:
 
@@ -208,7 +208,7 @@ paused
 
 Safety-critical enforcement should be backend-side, ideally inside or immediately adjacent to `settle()` so there is still one money door.
 
-Alex can build the UI and simple state plumbing. If enforcement touches `settle()`, Atlas/Helios should review.
+Alex can build the UI and simple state plumbing. If enforcement touches `settle()`, Ben + Atlas must review before merge.
 
 ## Acceptance criteria
 
@@ -551,7 +551,7 @@ This is useful for Policy Replay.
 
 Strong idea, but backend-heavy if done properly.
 
-Demo-lite UI only if Helios/backend can support it:
+Demo-lite UI only if Ben + Atlas can support the backend safely:
 
 ```text
 Two spend requests hit same job budget.
@@ -665,6 +665,18 @@ Use existing `/authorize` if possible.
 
 Make the flow smooth enough for screen recording.
 
+
+---
+
+# Delivery target
+
+We are aiming for both:
+
+1. **Live-clickable demo** — the dashboard can run from the backend and show real state transitions.
+2. **Polished recorded demo** — Ben + Atlas use the live UI states to produce the final motion/story cut.
+
+This means Alex's UI should expose clean, recordable states, not just final static cards. If a feature cannot be made fully live in time, label it honestly as replay/simulation/roadmap rather than implying execution truth.
+
 ---
 
 # Non-negotiables
@@ -700,15 +712,18 @@ Arbiter is not an AI with a Stripe key. It is a controlled money operator. The o
 
 ---
 
-# What Helios should own/check
+# What Ben + Atlas own/check
 
-Helios should handle or review:
+Helios is off the hackathon now so he can focus on Kalshi bot work. Ben + Atlas own backend safety review for this push.
+
+Ben + Atlas should handle or review:
 
 - autonomy-mode enforcement if it touches `settle()`
 - policy replay backend endpoint if added
 - red-team test backend if added
 - any rail reconciliation state changes
 - tests proving no bypass / no accidental execution
+- final truth-check before demo recording and live run
 
 Minimum tests we should want:
 
