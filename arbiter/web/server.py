@@ -43,6 +43,7 @@ from ..policy.config import (
     normalize_policy_config,
     policy_context_from_dict,
 )
+from ..policy.red_team import run_red_team
 from ..stripe_glue import select_stripe
 
 DASHBOARD_DIR = Path(__file__).resolve().parent.parent.parent / "dashboard"
@@ -361,6 +362,14 @@ class PolicyReplayRequest(BaseModel):
     policy: dict[str, Any] = Field(default_factory=dict)
 
 
+class RedTeamRequest(BaseModel):
+    """Run adversarial spend probes against proposed owner policy."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    policy: dict[str, Any] = Field(default_factory=dict)
+
+
 def _policy_result_payload(result) -> dict:
     return {
         "decision": result.decision.value,
@@ -477,6 +486,18 @@ def replay_policy(req: PolicyReplayRequest) -> JSONResponse:
         "moved_money": False,
         "mutated_state": False,
     })
+
+
+@app.post("/red_team")
+def red_team(req: RedTeamRequest) -> JSONResponse:
+    """Run built-in adversarial spend tests against current/proposed policy."""
+    if not isinstance(req.policy, dict):
+        return JSONResponse({"error": "policy must be an object"}, status_code=422)
+    raw_policy = {**state.owner_policy, **req.policy}
+    try:
+        return JSONResponse(run_red_team(raw_policy))
+    except PolicyConfigError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=422)
 
 
 @app.post("/reset")

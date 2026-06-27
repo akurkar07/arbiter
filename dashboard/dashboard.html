@@ -219,6 +219,21 @@
           </div>
         </section>
 
+        <!-- Red-team spend test -->
+        <section class="panel redteam-panel" id="red-team-section">
+          <div class="panel-head">
+            <h3>Red-team spend test</h3>
+            <span class="panel-meta" id="redteam-status">Attack probes have not run</span>
+          </div>
+          <div class="redteam-body">
+            <div class="redteam-topline">
+              <button id="redteam-run" class="btn btn-outline">Run adversarial spend test</button>
+              <p>Runs prompt-injection, unapproved-payee, duplicate, amount-mismatch, off-goal, and over-budget probes against the backend policy engine.</p>
+            </div>
+            <div class="redteam-results" id="redteam-results">No attack results yet.</div>
+          </div>
+        </section>
+
         <!-- Engine strip -->
         <div class="panel" id="engine-section">
           <div class="panel-head">
