@@ -153,6 +153,44 @@
           </div>
         </div>
 
+        <!-- Owner policy setup -->
+        <section class="panel policy-panel" id="policy-section">
+          <div class="panel-head">
+            <h3>Owner policy setup</h3>
+            <span class="panel-meta" id="policy-status">Rules loaded from backend</span>
+          </div>
+          <div class="policy-grid">
+            <label class="policy-field">
+              <span>Spend cap</span>
+              <input id="policy-spend-cap" type="number" min="1" step="1" value="1000" />
+            </label>
+            <label class="policy-field">
+              <span>Budget remaining</span>
+              <input id="policy-budget" type="number" min="0" step="1" value="1000" />
+            </label>
+            <label class="policy-field">
+              <span>New vendor auto threshold</span>
+              <input id="policy-new-vendor" type="number" min="0" step="1" value="50" />
+            </label>
+            <label class="policy-field">
+              <span>Bank-change evidence bar</span>
+              <input id="policy-evidence" type="number" min="0" max="1" step="0.05" value="0.8" />
+            </label>
+            <label class="policy-field policy-wide">
+              <span>Allowed spend categories</span>
+              <input id="policy-categories" type="text" value="fraud_detection, ocr, bank_reconciliation" />
+            </label>
+            <label class="policy-field policy-wide">
+              <span>Approved suppliers</span>
+              <input id="policy-payees" type="text" value="aws, northstar_studio, acme_print" />
+            </label>
+          </div>
+          <div class="policy-actions">
+            <button id="policy-save" class="btn btn-outline">Save owner policy</button>
+            <p id="policy-summary">Arbiter may only spend inside these owner-defined rules.</p>
+          </div>
+        </section>
+
         <!-- Engine strip -->
         <div class="panel" id="engine-section">
           <div class="panel-head">
