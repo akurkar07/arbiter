@@ -31,6 +31,7 @@ from ..agent.spend_judge import select_spend_judge
 from ..business_day import business_day_events
 from ..ledger import EventLedger, reconcile
 from ..models import AgentEvent, EventKind, DecisionKind
+from ..agent.agent import TRUST_MODES
 from ..metrics import reinvest_improvement
 from ..operator import BusinessOperator, demo_jobs
 from ..procurement import ProcurementScout, demo_catalog
@@ -90,7 +91,8 @@ class DemoState:
         self.lock = threading.Lock()
         self.reset()
 
-    def reset(self) -> None:
+    def reset(self, trust_mode: str | None = None) -> None:
+        trust_mode = trust_mode or "policy_autopilot"
         self.ctx = demo_policy_context()  # the 3-supplier allowlist governs the demo
         self.ledger = EventLedger()
         self.escalation = WebEscalation()
@@ -105,6 +107,7 @@ class DemoState:
             escalation=self.escalation,
             stripe=select_stripe(),
         )
+        self.agent.set_trust_mode(trust_mode)
         self.running = False
         self.done = False
         self.thread: threading.Thread | None = None
@@ -133,6 +136,8 @@ class DemoState:
         does (no separate pay path to drift out of sync).
         """
         for event_id, beat, event, seeds in business_day_events():
+            if self.agent.trust_mode == "paused":
+                break
             # Seed any pre-demo payment fingerprints (for duplicate detection).
             for fp in seeds:
                 self.ctx.recent_payment_fingerprints.add((fp[0], fp[1], fp[2]))
@@ -151,7 +156,7 @@ class DemoState:
 
     def start(self, step_delay: float = 1.2) -> None:
         with self.lock:
-            if self.running:
+            if self.running or self.agent.trust_mode == "paused":
                 return
             self.running = True
             self.done = False
@@ -186,6 +191,8 @@ class DemoState:
             )
 
         for job in demo_jobs():
+            if self.agent.trust_mode == "paused":
+                break
             op.run_job(job, on_spend_refused=on_refused)
             time.sleep(step_delay)
 
@@ -194,7 +201,7 @@ class DemoState:
 
     def start_operator(self, step_delay: float = 1.2) -> None:
         with self.lock:
-            if self.running:
+            if self.running or self.agent.trust_mode == "paused":
                 return
             self.running = True
             self.done = False
@@ -231,6 +238,11 @@ class DemoState:
             # real measured number rather than an assertion.
             "governance": governance,
             "has_capability": has_capability,
+            "trust_mode": self.agent.trust_mode,
+            "trust_controls": {
+                "mode": self.agent.trust_mode,
+                "modes": list(TRUST_MODES),
+            },
             "awaiting_approval": self.escalation.pending,
             # When the business-operator is the active story, expose its per-job
             # ledger + rollup so the dashboard can show "watch the business run":
@@ -300,7 +312,7 @@ def get_state() -> JSONResponse:
 @app.post("/run")
 def run() -> dict:
     state.start()
-    return {"running": True}
+    return {"running": state.running, "trust_mode": state.agent.trust_mode}
 
 
 @app.post("/run_operator")
@@ -312,7 +324,25 @@ def run_operator() -> dict:
     decisions and per-job business rollup live.
     """
     state.start_operator()
-    return {"running": True, "operator_mode": True}
+    return {"running": state.running, "operator_mode": state.operator_mode, "trust_mode": state.agent.trust_mode}
+
+
+class TrustModeRequest(BaseModel):
+    mode: str
+
+
+@app.post("/trust_mode")
+def set_trust_mode(req: TrustModeRequest) -> JSONResponse:
+    if req.mode not in TRUST_MODES:
+        return JSONResponse(
+            {"error": f"unknown trust mode {req.mode!r}", "valid_modes": list(TRUST_MODES)},
+            status_code=422,
+        )
+    state.agent.set_trust_mode(req.mode)
+    if req.mode == "paused" and state.running:
+        # Release any pending gate so the worker can observe the pause and exit.
+        state.escalation.resolve(DecisionKind.BLOCK)
+    return JSONResponse({"trust_mode": state.agent.trust_mode, "running": state.running})
 
 
 @app.post("/reset")
@@ -321,8 +351,9 @@ def reset() -> dict:
         if state.running:
             # release any parked escalation so the worker thread can exit
             state.escalation.resolve(DecisionKind.BLOCK)
-        state.reset()
-    return {"reset": True}
+        trust_mode = state.agent.trust_mode
+        state.reset(trust_mode=trust_mode)
+    return {"reset": True, "trust_mode": state.agent.trust_mode}
 
 
 def _resolve(event_id: str, decision: DecisionKind) -> HTMLResponse:

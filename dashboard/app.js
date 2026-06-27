@@ -21,6 +21,7 @@ const el = {
   crumbs: document.getElementById("crumbs"),
   runDemo: document.getElementById("run-demo"),
   toggleLive: document.getElementById("toggle-live"),
+  trustMode: document.getElementById("trust-mode"),
   // views
   viewOverview: document.getElementById("view-overview"),
   viewDetail: document.getElementById("view-detail"),
@@ -92,6 +93,7 @@ let mode = "sample"; // "sample" | "live"
 let pollTimer = null;
 let pendingApproval = null;
 let currentState = { timeline: [] };
+let desiredTrustMode = "policy_autopilot";
 let lastTableKey = "";
 let ownerTapResolver = null; // set while the demo waits for a human tap
 
@@ -1201,6 +1203,10 @@ window.addEventListener("hashchange", applyRoute);
 
 function render(state) {
   currentState = state || { timeline: [] };
+  if (state && state.trust_mode && el.trustMode && document.activeElement !== el.trustMode) {
+    desiredTrustMode = state.trust_mode;
+    el.trustMode.value = state.trust_mode;
+  }
   renderMeters(state);
   renderSpark(state);
   renderVerdictBanner(state);
@@ -1289,6 +1295,11 @@ function startLive() {
   (async () => {
     try {
       await fetch("/reset", { method: "POST" });
+      await fetch("/trust_mode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: desiredTrustMode }),
+      });
       await fetch("/run_operator", { method: "POST" });
     } catch (_) {
       /* no backend; pollLive reports it */
@@ -1313,6 +1324,23 @@ el.toggleLive.addEventListener("click", () => {
   if (mode === "live") stopLive();
   else startLive();
 });
+
+if (el.trustMode) {
+  el.trustMode.addEventListener("change", async () => {
+    desiredTrustMode = el.trustMode.value;
+    if (mode !== "live") return;
+    try {
+      await fetch("/trust_mode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: desiredTrustMode }),
+      });
+      pollLive();
+    } catch (_) {
+      /* backend owns the truth; next poll reconciles */
+    }
+  });
+}
 
 /* ---------- approve / deny ---------- */
 
