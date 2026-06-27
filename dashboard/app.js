@@ -78,6 +78,7 @@ const el = {
   sourcingMeta: document.getElementById("sourcing-meta"),
   // detail
   detailHead: document.getElementById("detail-head"),
+  detailReceipt: document.getElementById("detail-receipt"),
   detailEvent: document.getElementById("detail-event"),
   detailTrace: document.getElementById("detail-trace"),
   detailOutcome: document.getElementById("detail-outcome"),
@@ -837,6 +838,145 @@ function stepHtml(step) {
     </details>`;
 }
 
+function settlementForRow(state, row) {
+  return ((state && state.settlements) || []).find((s) => s.event_id === row.id) || null;
+}
+
+function executionTruthForRow(state, row) {
+  const awaiting = state && state.awaiting_approval && state.awaiting_approval.event_id === row.id;
+  const settlement = settlementForRow(state, row);
+  const stripeId = stripeRefForRow(state, row) || (settlement && settlement.stripe_id);
+  const backend = (settlement && settlement.backend) || (state && state.stripe_backend) || "stub";
+
+  if (awaiting) {
+    return {
+      tone: "warn",
+      label: "Waiting on owner",
+      detail: "No money moves until the approval gate resolves.",
+      stripeId: null,
+    };
+  }
+
+  if (row.kind === "invoice_payment" && stripeId) {
+    return {
+      tone: "pass",
+      label: "Client payment verified",
+      detail: "Inbound Stripe test-mode payment reconciled to this job.",
+      stripeId,
+    };
+  }
+
+  if (row.decision !== "approve") {
+    return {
+      tone: "safe",
+      label: "No money moved",
+      detail: row.decision === "block"
+        ? "The policy gate refused the request before settlement."
+        : "The request escalated instead of executing automatically.",
+      stripeId: null,
+    };
+  }
+
+  if (settlement && settlement.failed) {
+    return {
+      tone: "fail",
+      label: "Rail failed",
+      detail: "Policy approved it, but the Stripe rail did not settle. The failure is visible instead of hidden.",
+      stripeId: stripeId || null,
+    };
+  }
+
+  if (stripeId) {
+    return {
+      tone: "pass",
+      label: "Rail settled",
+      detail: "Approved by policy and matched to a Stripe test-mode receipt.",
+      stripeId,
+    };
+  }
+
+  return {
+    tone: backend === "stub" ? "safe" : "warn",
+    label: backend === "stub" ? "Recorded stub" : "Approved, no Stripe id",
+    detail: backend === "stub"
+      ? "Offline demo mode recorded the approved action without a real rail object."
+      : "Approved, but no real Stripe receipt is attached to this row.",
+    stripeId: null,
+  };
+}
+
+function receiptHtml(state, row) {
+  const nim = judgementForRow(state, row);
+  const exec = executionTruthForRow(state, row);
+  const refs = row.refs || [];
+  const stripeHref = stripeLink(exec.stripeId);
+  const aiLabel = nim
+    ? `${String(nim.decision || "judged").toUpperCase()} · ${nim.margin_ok === false ? "margin risk" : "margin OK"}`
+    : stageOf(row.layer) === "model"
+      ? `${row.decision.toUpperCase()} · bounded model decided`
+      : "Not needed";
+  const aiDetail = nim
+    ? nim.reason
+    : stageOf(row.layer) === "model"
+      ? row.reason
+      : "Deterministic policy was decisive, so no model judgement was required for this event.";
+  const policyDetail = refs.length
+    ? refs.map(refLabel).join(" · ")
+    : "No named policy reference on this row.";
+  const verdict = verdictLabel(row);
+  const verdictDetail = row.decision === "approve"
+    ? "Approved request may proceed to the settlement door."
+    : row.decision === "block"
+      ? "Request refused. Settlement is blocked."
+      : "Request parked for owner approval.";
+  const stripeLine = exec.stripeId
+    ? (stripeHref
+        ? `<a class="receipt-stripe mono" href="${stripeHref}" target="_blank" rel="noopener">${escapeHtml(exec.stripeId)} ↗</a>`
+        : `<span class="receipt-stripe mono">${escapeHtml(exec.stripeId)}</span>`)
+    : "";
+
+  return `
+    <div class="panel-head">
+      <h3>Decision receipt</h3>
+      <span class="panel-meta">AI suggests · policy decides · rail proves</span>
+    </div>
+    <div class="receipt-body">
+      <div class="receipt-grid">
+        <div class="receipt-card is-request">
+          <span class="receipt-step">1</span>
+          <span class="receipt-label">Request</span>
+          <strong>${escapeHtml(KIND_LABEL[row.kind] || row.kind)}</strong>
+          <p>${row.amount != null ? money(row.amount, row.currency) : "No amount"}${row.category ? ` · ${escapeHtml(row.category)}` : ""}</p>
+        </div>
+        <div class="receipt-card is-ai ${nim ? "has-ai" : "is-muted"}">
+          <span class="receipt-step">2</span>
+          <span class="receipt-label">AI suggestion</span>
+          <strong>${escapeHtml(aiLabel)}</strong>
+          <p>${escapeHtml(aiDetail)}</p>
+        </div>
+        <div class="receipt-card is-policy">
+          <span class="receipt-step">3</span>
+          <span class="receipt-label">Policy checks</span>
+          <strong>${escapeHtml(STAGE_META[stageOf(row.layer)].name)}</strong>
+          <p>${escapeHtml(policyDetail)}</p>
+        </div>
+        <div class="receipt-card is-verdict v-${row.decision}">
+          <span class="receipt-step">4</span>
+          <span class="receipt-label">Verdict</span>
+          <strong>${escapeHtml(verdict)}</strong>
+          <p>${escapeHtml(verdictDetail)}</p>
+        </div>
+        <div class="receipt-card is-exec exec-${exec.tone}">
+          <span class="receipt-step">5</span>
+          <span class="receipt-label">Execution truth</span>
+          <strong>${escapeHtml(exec.label)}</strong>
+          <p>${escapeHtml(exec.detail)}</p>
+          ${stripeLine}
+        </div>
+      </div>
+    </div>`;
+}
+
 function renderDetail(id) {
   const row = (currentState.timeline || []).find((r) => r.id === id);
   if (!row) {
@@ -867,6 +1007,9 @@ function renderDetail(id) {
       `<div class="detail-banner"><div class="db-main">\u26D4 <span><b>Margin-killer refused.</b> This spend would have cost more than the job brings in, so the agent refused it to keep the job profitable.</span></div>${nimLine}</div>`
     );
   }
+
+  // ----- receipt panel -----
+  el.detailReceipt.innerHTML = receiptHtml(currentState, row);
 
   // ----- request panel -----
   const sigRefs = row.refs || [];
