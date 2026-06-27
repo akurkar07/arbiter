@@ -1,7 +1,7 @@
 param(
     [int]$Port = 8000,
     [switch]$NoInstall,
-    [switch]$OpenBrowser
+    [switch]$Dashboard
 )
 
 $ErrorActionPreference = "Stop"
@@ -44,14 +44,17 @@ if ($NeedsInstall) {
 
 $StripeMode = if ($env:STRIPE_SECRET_KEY) { "real Stripe test-mode" } else { "mock Stripe" }
 $NvidiaMode = if ($env:NVIDIA_API_KEY -or $env:NVIDIA_NIM_KEY) { "real NVIDIA NIM" } else { "mock Nemotron" }
-$Url = "http://127.0.0.1:$Port/dashboard.html"
+$Path = if ($Dashboard) { "/dashboard.html" } else { "/" }
+$Url = "http://127.0.0.1:$Port$Path"
 
-Write-Step "Starting dashboard on $Url"
+Write-Step "Starting Arbiter on $Url"
 Write-Step "Rails: $StripeMode; $NvidiaMode"
-Write-Step "Press Go live in the dashboard to run /run_operator"
-
-if ($OpenBrowser) {
-    Start-Process $Url
+if ($Dashboard) {
+    Write-Step "Opening the dashboard directly. Press Go live to run /run_operator"
+} else {
+    Write-Step "Opening the landing page. Use -Dashboard to skip straight to the app"
 }
+
+Start-Process $Url
 
 & $VenvPython -m uvicorn arbiter.web.server:app --port $Port

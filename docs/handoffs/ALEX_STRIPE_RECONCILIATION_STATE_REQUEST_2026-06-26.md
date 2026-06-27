@@ -1,5 +1,16 @@
 # Dashboard request: row-level Stripe settlement receipts
 
+Status: fulfilled by backend merge `1c15098` on June 27, 2026.
+
+The dashboard now binds to the live `/state` fields:
+
+- `customer_payments[]` for inbound `pi_...` receipts.
+- `supplier_payments[]` for outbound supplier `tr_...` receipts.
+- `settlements[]` for row-level outflow receipts keyed by `event_id`.
+- `reconciliation` for `{ledger_spend, rail_settled, drift, ok, failed_calls}`.
+
+Historical request below kept for traceability.
+
 The dashboard now consumes the Stripe fields already exposed on `/state`:
 
 - `business.jobs[].payment_id` for inbound client `pi_...` receipts.

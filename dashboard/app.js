@@ -201,21 +201,59 @@ function judgementForRow(state, row) {
   return spend ? spend.judgement : null;
 }
 
-// The real Stripe object id for a row, if the live rail produced one. Client
-// payments (pi_..) are exposed per job; AP/vendor supplier transfers (tr_..) are
-// exposed on state.supplier_payments with the event ref. Both are judge-facing
-// receipts that can be found in the Stripe test dashboard.
-function stripeRefForRow(state, row) {
+// Rail status for a row, if the backend exposed one. We show three honest states:
+// a real Stripe receipt, a recorded/stub settlement, or a failed rail call.
+function railStatusForRow(state, row) {
   if (row.kind === "invoice_payment") {
+    const customerPayments = (state && state.customer_payments) || [];
+    const payment =
+      customerPayments.find((p) => p.ref === row.ref || p.ref === row.invoice_ref || p.event_id === row.id) ||
+      customerPayments.find((p) => Number(p.amount) === Number(row.amount) && (isRealStripeId(p.stripe_id) || p.failed));
+    if (payment) {
+      return {
+        id: payment.stripe_id || null,
+        failed: payment.failed === true,
+        recorded: !isRealStripeId(payment.stripe_id),
+        label: payment.failed ? "Rail failed" : isRealStripeId(payment.stripe_id) ? "Stripe receipt" : "Recorded payment",
+        notes: payment.notes || "",
+      };
+    }
+
     const jobs = state && state.business && state.business.jobs ? state.business.jobs : [];
     const job = jobs.find((j) => j.title === row.job);
     const id = job && job.payment_id;
-    return isRealStripeId(id) ? id : null;
+    return isRealStripeId(id) ? { id, failed: false, recorded: false, label: "Stripe receipt", notes: "" } : null;
   }
+  const settlements = (state && state.settlements) || [];
+  const settlement = settlements.find((s) => s.event_id === row.id);
+  if (settlement) {
+    return {
+      id: settlement.stripe_id || null,
+      failed: settlement.failed === true,
+      recorded: !isRealStripeId(settlement.stripe_id),
+      label: settlement.failed ? "Rail failed" : isRealStripeId(settlement.stripe_id) ? "Stripe receipt" : "Recorded settlement",
+      notes: settlement.notes || "",
+    };
+  }
+
   const supplierPayments = (state && state.supplier_payments) || [];
   const supplierPayment = supplierPayments.find((p) => p.ref === row.id);
-  const id = supplierPayment && supplierPayment.stripe_id;
-  return isRealStripeId(id) ? id : null;
+  if (supplierPayment) {
+    return {
+      id: supplierPayment.stripe_id || null,
+      failed: supplierPayment.failed === true,
+      recorded: !isRealStripeId(supplierPayment.stripe_id),
+      label: supplierPayment.failed ? "Rail failed" : isRealStripeId(supplierPayment.stripe_id) ? "Stripe receipt" : "Recorded settlement",
+      notes: supplierPayment.notes || "",
+    };
+  }
+  return null;
+}
+
+// The real Stripe object id for a row, if the live rail produced one.
+function stripeRefForRow(state, row) {
+  const rail = railStatusForRow(state, row);
+  return rail && isRealStripeId(rail.id) ? rail.id : null;
 }
 
 const STRIPE_OBJ_BASE = {
@@ -232,6 +270,33 @@ function stripeLink(id) {
   if (!isRealStripeId(id)) return null;
   const base = STRIPE_OBJ_BASE[String(id).split("_")[0]];
   return base ? base + id : null;
+}
+
+function railChipHtml(rail) {
+  if (!rail) return "";
+  if (rail.failed) {
+    return `<span class="rail-chip rail-failed" title="${escapeHtml(rail.notes || "Rail call failed")}">RAIL FAILED</span>`;
+  }
+  if (isRealStripeId(rail.id)) {
+    return `<span class="stripe-chip" title="Real Stripe test-mode id">${escapeHtml(rail.id)}</span>`;
+  }
+  return `<span class="rail-chip rail-recorded" title="Recorded by the rail adapter; no real Stripe id">${escapeHtml(rail.label || "Recorded")}</span>`;
+}
+
+function railDetailRowHtml(rail) {
+  if (!rail) return "";
+  const stripeId = isRealStripeId(rail.id) ? rail.id : null;
+  const stripeHref = stripeLink(stripeId);
+  if (rail.failed) {
+    return `<div class="kv-row"><span class="k">Rail status</span><span class="v rail-status-failed">Rail failed${rail.notes ? ` · ${escapeHtml(rail.notes)}` : ""}</span></div>`;
+  }
+  if (stripeId) {
+    const value = stripeHref
+      ? `<a class="v mono stripe-link" href="${stripeHref}" target="_blank" rel="noopener">${escapeHtml(stripeId)} \u2197</a>`
+      : `<span class="v mono">${escapeHtml(stripeId)}</span>`;
+    return `<div class="kv-row"><span class="k">Stripe receipt</span>${value}</div>`;
+  }
+  return `<div class="kv-row"><span class="k">Settlement</span><span class="v rail-status-recorded">${escapeHtml(rail.label || "Recorded settlement")}</span></div>`;
 }
 
 // A block is one of two very different stories: an *economic* margin refusal —
@@ -520,22 +585,31 @@ function renderReconciliation(state) {
   }
   el.reconcileSection.classList.remove("hidden");
 
-  // Two independently-computed totals must agree: the ledger's running spend
-  // total (top-level, summed as money left the single door) and the business
-  // rollup's cost_spent (summed per job). Any drift means a payment fired
-  // without a matching decision — exactly what this strip exists to catch.
-  const ledgerSpend = Number(state.spend) || 0;
-  const rollupCost = Number(b.cost_spent) || 0;
-  const supplierPayments = (state.supplier_payments || []).filter((p) => isRealStripeId(p.stripe_id));
-  const supplierTransferTotal = supplierPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
-  const ledgerEarn = Number(state.earnings) || 0;
+  const rec = state.reconciliation || null;
+  const settlements = Array.isArray(state.settlements) ? state.settlements : [];
+  const settledRows = settlements.filter((s) => !s.failed);
+  const realSettlements = settledRows.filter((s) => isRealStripeId(s.stripe_id));
+  const failedCalls = rec && Array.isArray(rec.failed_calls) ? rec.failed_calls : [];
+  const ledgerSpend = rec ? Number(rec.ledger_spend) || 0 : Number(state.spend) || 0;
+  const railSettled = rec ? Number(rec.rail_settled) || 0 : Number(b.cost_spent) || 0;
+  const drift = rec ? Number(rec.drift) || 0 : Math.abs(ledgerSpend - railSettled);
+  const reconciled = rec ? rec.ok === true : drift < 0.005;
   const rollupRevenue = Number(b.revenue_booked) || 0;
-  const spendDrift = Math.abs(ledgerSpend - rollupCost);
-  const earnDrift = Math.abs(ledgerEarn - rollupRevenue);
-  const reconciled = spendDrift < 0.005 && earnDrift < 0.005;
 
-  // The real Stripe ids we can point a judge at (one client pi_.. per booked job).
-  const verified = (b.jobs || []).filter((j) => j.revenue_booked && isRealStripeId(j.payment_id)).length;
+  const customerPayments = Array.isArray(state.customer_payments) ? state.customer_payments : [];
+  const verified = customerPayments.length
+    ? customerPayments.filter((p) => !p.failed && isRealStripeId(p.stripe_id)).length
+    : (b.jobs || []).filter((j) => j.revenue_booked && isRealStripeId(j.payment_id)).length;
+  const outflowNote = realSettlements.length
+    ? `${realSettlements.length} Stripe receipt${realSettlements.length > 1 ? "s" : ""}`
+    : settledRows.length
+      ? `${settledRows.length} recorded settlement${settledRows.length > 1 ? "s" : ""}`
+      : "no outflow yet";
+  const failureHtml = failedCalls.length
+    ? `<div class="rec-failures">${failedCalls.map((f) =>
+        `<span>${escapeHtml(f.op || "rail")} ${money(f.amount || 0, f.currency || "GBP")} failed${f.notes ? `: ${escapeHtml(f.notes)}` : ""}</span>`
+      ).join("")}</div>`
+    : "";
 
   el.reconcile.innerHTML =
     `<div class="rec-chain">` +
@@ -543,15 +617,16 @@ function renderReconciliation(state) {
     `<span class="rec-arrow" aria-hidden="true">\u2192</span>` +
     `<div class="rec-node"><span class="rec-k">Payments in</span><span class="rec-v">${money(rollupRevenue)} <small>${verified} Stripe-verified</small></span></div>` +
     `<span class="rec-arrow" aria-hidden="true">\u2192</span>` +
-    `<div class="rec-node"><span class="rec-k">Settled out</span><span class="rec-v">${money(rollupCost)} <small>${supplierPayments.length ? `${money(supplierTransferTotal)} Stripe transfers` : "ledger-backed"}</small></span></div>` +
+    `<div class="rec-node"><span class="rec-k">Settled out</span><span class="rec-v">${money(railSettled)} <small>${outflowNote}</small></span></div>` +
     `<span class="rec-arrow" aria-hidden="true">\u2192</span>` +
     `<div class="rec-node"><span class="rec-k">Margin kept</span><span class="rec-v">${money(Number(b.net_profit) || 0)}</span></div>` +
     `</div>` +
     `<div class="rec-check ${reconciled ? "ok" : "drift"}">` +
     (reconciled
-      ? `\u2713 Reconciled \u2014 ledger total ${money(ledgerSpend)} matches the per-job settlement total ${money(rollupCost)}.`
-      : `\u26A0 Drift \u2014 ledger ${money(ledgerSpend)} vs settlement ${money(rollupCost)} (\u0394 ${money(spendDrift)}). Investigate before trusting the run.`) +
-    `</div>`;
+      ? `\u2713 Reconciled \u2014 ledger spend ${money(ledgerSpend)} matches rail-settled outflow ${money(railSettled)}.`
+      : `\u26A0 Drift \u2014 ledger spend ${money(ledgerSpend)} vs rail-settled ${money(railSettled)} (\u0394 ${money(drift)}). Investigate before trusting the run.`) +
+    `</div>` +
+    failureHtml;
 }
 
 function setStageActive(stage) {
@@ -588,13 +663,19 @@ function renderProcurement(state) {
       // The model proposed something off-catalog/below-bar and the backend
       // canonicalised it back to the safe baseline. That correction IS the moat.
       const corrected = s.model_was_corrected === true;
+      const considered = Array.isArray(s.considered) ? s.considered : [];
+      const altNames = considered
+        .filter((it) => it && it.item_id !== chosen.item_id)
+        .slice(0, 2)
+        .map((it) => `${escapeHtml(it.name || it.item_id)} ${money(it.price || 0)}`)
+        .join(" · ");
       const altLine = premium && Number(premium.price) > Number(chosen.price)
-        ? `chose <b>${money(chosen.price)}</b> over <b>${money(premium.price)}</b> (${escapeHtml(premium.name || premium.item_id || "premium")})`
+        ? `chose <b>${money(chosen.price)}</b> over premium <b>${money(premium.price)}</b> (${escapeHtml(premium.name || premium.item_id || "premium")})`
         : `sourced <b>${money(chosen.price)}</b> at quality ${chosen.quality != null ? Number(chosen.quality).toFixed(2) : "—"}`;
       return `
       <div class="sourcing-row${saved > 0 ? " is-saver" : ""}">
         <div class="sc-name"><span class="sc-dot"></span><span class="sc-text"><b>${escapeHtml(chosen.name || chosen.item_id || "tool")}</b><small>${escapeHtml(s.capability || "")}${corrected ? " · model proposal corrected to safe baseline" : ""}</small></span></div>
-        <div class="sc-pick">${altLine}</div>
+        <div class="sc-pick">${altLine}${altNames ? `<small>Considered: ${altNames}</small>` : ""}</div>
         <div class="sc-save">${saved > 0 ? `<span class="sc-save-val">−${money(saved)}</span><span class="sc-save-k">saved</span>` : `<span class="sc-save-k">cheapest fit</span>`}</div>
       </div>`;
     })
@@ -655,11 +736,9 @@ function rowTemplate(row) {
   const kindLabel = KIND_LABEL[row.kind] || row.kind;
   const sub = row.job ? `${escapeHtml(row.job)} · ${escapeHtml(kindLabel)}` : escapeHtml(kindLabel);
   const flow = moneyFlow(row);
-  // Real Stripe id (pi_.. or tr_..) shown as proof on paid rows when exposed.
-  const stripeId = stripeRefForRow(currentState, row);
-  const stripeChip = stripeId
-    ? `<span class="stripe-chip" title="Real Stripe test-mode id">${escapeHtml(stripeId)}</span>`
-    : "";
+  // Real Stripe id, recorded settlement, or failed rail call shown on paid rows.
+  const rail = railStatusForRow(currentState, row);
+  const railChip = railChipHtml(rail);
 
   tr.innerHTML = `
     <td>
@@ -667,7 +746,7 @@ function rowTemplate(row) {
         <span class="kdot ${dotClass}"></span>
         <span class="ktext">
           <span class="kbeat">${escapeHtml(row.beat)}</span>
-          <span class="kkind">${sub}${row.kind === "self_spend" ? '<span class="self-tag"> · SPEND</span>' : ""}${stripeChip}</span>
+          <span class="kkind">${sub}${row.kind === "self_spend" ? '<span class="self-tag"> · SPEND</span>' : ""}${railChip}</span>
         </span>
       </div>
     </td>
@@ -870,15 +949,8 @@ function renderDetail(id) {
 
   // ----- request panel -----
   const sigRefs = row.refs || [];
-  const stripeId = stripeRefForRow(currentState, row);
-  const stripeHref = stripeLink(stripeId);
-  const stripeRowHtml = stripeId
-    ? `<div class="kv-row"><span class="k">Stripe receipt</span>${
-        stripeHref
-          ? `<a class="v mono stripe-link" href="${stripeHref}" target="_blank" rel="noopener">${escapeHtml(stripeId)} \u2197</a>`
-          : `<span class="v mono">${escapeHtml(stripeId)}</span>`
-      }</div>`
-    : "";
+  const rail = railStatusForRow(currentState, row);
+  const railRowHtml = railDetailRowHtml(rail);
   el.detailEvent.innerHTML = `
     <div class="panel-head"><h3>Request</h3></div>
     <div class="panel-body">
@@ -888,7 +960,7 @@ function renderDetail(id) {
         <div class="kv-row"><span class="k">Currency</span><span class="v">${escapeHtml(row.currency || "-")}</span></div>
         ${row.category ? `<div class="kv-row"><span class="k">Category</span><span class="v">${escapeHtml(row.category)}</span></div>` : ""}
         <div class="kv-row"><span class="k">Event ID</span><span class="v mono">${escapeHtml(row.id)}</span></div>
-        ${stripeRowHtml}
+        ${railRowHtml}
         <div class="kv-row"><span class="k">Source</span><span class="v">${escapeHtml(sourceLine(row))}</span></div>
         <div class="kv-row"><span class="k">Signals</span>${sigRefs.length ? refPillsHtml(sigRefs) : '<span class="v">-</span>'}</div>
       </div>
