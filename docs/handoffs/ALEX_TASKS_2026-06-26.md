@@ -3,7 +3,7 @@
 Context: the engine side is done and live — `/run_operator` runs the real margin
 engine with live Nemotron + Stripe test-mode, and the timeline now stamps `job` +
 `margin_killer` on every row so your hero treatment and per-job grouping fire on
-real data (PR #4). Atlas's competitive brief says the field is crowded with
+real data (PR #4). The competitive brief says the field is crowded with
 "autonomous business agent" demos, and our one differentiator is the **margin
 refusal beat** — "it refused to buy that because it would have made the job
 unprofitable." Your lane is what makes that beat impossible to miss. Everything
@@ -72,7 +72,7 @@ story. Add a one-line verdict banner that updates after a run:
   live state, no hardcoded numbers.
 
 ### 3. The refusal beat needs to feel non-obvious
-Atlas's brief is explicit: fraud blocking is *expected* and every competitor has
+The competitive brief is explicit: fraud blocking is *expected* and every competitor has
 it. Our memorable beat is a **legitimate-sounding** purchase refused because the
 margin would go negative — not fraud. The current hero spend (premium stock library
 £45 on a £15-margin-left job) is right; make sure the UI frames it as "a reasonable
@@ -123,7 +123,7 @@ surface.
   like a phone, not just a desktop button.
 
 ### 7. 60–90 second demo cut
-Atlas's brief asks for a demo narrative that lands without explanation. Once the
+The competitive brief asks for a demo narrative that lands without explanation. Once the
 above is in, record the operator run: invoice in → spend approved → **the refusal**
 → phone escalation → protected-margin ledger. The refusal is the climax; everything
 builds to it.

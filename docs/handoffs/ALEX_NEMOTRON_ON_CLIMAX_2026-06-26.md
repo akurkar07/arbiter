@@ -1,6 +1,6 @@
 # Handoff to Alex — surface NVIDIA Nemotron on the live climax frame
 
-**Date:** 2026-06-26 · **From:** Helios (engine lane) · **Status:** one UI gap, data is ready
+**Date:** 2026-06-26 · **From:** engine lane · **Status:** one UI gap, data is ready
 
 ## What changed on the engine side (already done, 129 tests green)
 

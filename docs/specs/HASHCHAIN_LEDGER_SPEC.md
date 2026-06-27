@@ -5,7 +5,7 @@ Owner: Ben (core). Effort: ~15-20 lines + ~5 tests. One method, two fields.
 
 ## Why
 
-RecoverOps — our closest competitor in Atlas's brief — advertises a "hash-chained
+RecoverOps — our closest competitor in the competitive brief — advertises a "hash-chained
 audit ledger." We have an append-only Python list whose docstring *says* "entries
 are never mutated or deleted" but nothing *enforces* it. When a judge asks "what
 stops someone editing a decision after the fact?", today's honest answer is
