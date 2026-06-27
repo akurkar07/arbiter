@@ -61,6 +61,9 @@ const el = {
   replayScenario: document.getElementById("replay-scenario"),
   replayRun: document.getElementById("replay-run"),
   replayResult: document.getElementById("replay-result"),
+  redteamStatus: document.getElementById("redteam-status"),
+  redteamRun: document.getElementById("redteam-run"),
+  redteamResults: document.getElementById("redteam-results"),
   stageRules: document.getElementById("stage-rules"),
   stageModel: document.getElementById("stage-model"),
   stageOwner: document.getElementById("stage-owner"),
@@ -417,6 +420,12 @@ function setReplayStatus(text, kind = "idle") {
   el.replayStatus.className = `panel-meta policy-status-${kind}`;
 }
 
+function setRedteamStatus(text, kind = "idle") {
+  if (!el.redteamStatus) return;
+  el.redteamStatus.textContent = text;
+  el.redteamStatus.className = `panel-meta policy-status-${kind}`;
+}
+
 function isPolicyFieldFocused() {
   return [
     el.policySpendCap,
@@ -547,6 +556,44 @@ async function runReplay() {
     return true;
   } catch (err) {
     setReplayStatus(err.message || "Policy replay failed", "error");
+    return false;
+  }
+}
+
+function renderRedteam(body) {
+  if (!el.redteamResults) return;
+  const rows = body.results || [];
+  el.redteamResults.innerHTML = rows.map((row) => `
+    <div class="redteam-row ${row.passed ? "passed" : "failed"}">
+      <span class="redteam-mark">${row.passed ? "PASS" : "FAIL"}</span>
+      <div>
+        <b>${escapeHtml(row.title)}</b>
+        <p>${escapeHtml(row.reason || "No reason returned")}</p>
+        <small>${escapeHtml((row.policy_refs || []).join(", "))}</small>
+      </div>
+    </div>`).join("");
+}
+
+async function runRedteam() {
+  const policy = currentPolicyFromForm();
+  if (mode !== "live") {
+    setRedteamStatus("Red-team needs live backend", "error");
+    if (el.redteamResults) el.redteamResults.textContent = "Switch to live mode to run adversarial probes against the backend engine.";
+    return false;
+  }
+  try {
+    const res = await fetch("/red_team", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ policy }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || `red-team test failed (${res.status})`);
+    renderRedteam(body);
+    setRedteamStatus(`${body.passed}/${body.total} attacks blocked`, body.all_passed ? "saved" : "error");
+    return true;
+  } catch (err) {
+    setRedteamStatus(err.message || "Red-team test failed", "error");
     return false;
   }
 }
@@ -1519,6 +1566,10 @@ if (el.policySave) {
 
 if (el.replayRun) {
   el.replayRun.addEventListener("click", runReplay);
+}
+
+if (el.redteamRun) {
+  el.redteamRun.addEventListener("click", runRedteam);
 }
 
 if (el.trustMode) {
