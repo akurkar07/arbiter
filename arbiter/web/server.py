@@ -23,7 +23,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from ..agent import ArbiterAgent
 from ..agent.nim_nemotron import select_nemotron
@@ -35,7 +35,12 @@ from ..agent.agent import TRUST_MODES
 from ..metrics import reinvest_improvement
 from ..operator import BusinessOperator, demo_jobs
 from ..procurement import ProcurementScout, demo_catalog
-from ..policy.config import demo_policy_context
+from ..policy.config import (
+    PolicyConfigError,
+    demo_owner_policy,
+    normalize_policy_config,
+    policy_context_from_dict,
+)
 from ..stripe_glue import select_stripe
 
 DASHBOARD_DIR = Path(__file__).resolve().parent.parent.parent / "dashboard"
@@ -89,11 +94,12 @@ class DemoState:
 
     def __init__(self) -> None:
         self.lock = threading.Lock()
+        self.owner_policy = demo_owner_policy()
         self.reset()
 
     def reset(self, trust_mode: str | None = None) -> None:
         trust_mode = trust_mode or "policy_autopilot"
-        self.ctx = demo_policy_context()  # the 3-supplier allowlist governs the demo
+        self.ctx = policy_context_from_dict(self.owner_policy)  # owner setup governs the demo
         self.ledger = EventLedger()
         self.escalation = WebEscalation()
         # The agent is the sole holder of the Stripe rail. select_stripe() gives
@@ -243,6 +249,7 @@ class DemoState:
                 "mode": self.agent.trust_mode,
                 "modes": list(TRUST_MODES),
             },
+            "owner_policy": self.owner_policy,
             "awaiting_approval": self.escalation.pending,
             # When the business-operator is the active story, expose its per-job
             # ledger + rollup so the dashboard can show "watch the business run":
@@ -331,6 +338,18 @@ class TrustModeRequest(BaseModel):
     mode: str
 
 
+class PolicyRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    spend_cap: float | None = None
+    budget_remaining: float | None = None
+    allowed_categories: list[str] | None = None
+    approved_payees: list[str] | None = None
+    duplicate_lookback: int | None = None
+    new_vendor_auto_threshold: float | None = None
+    detail_change_evidence_threshold: float | None = None
+
+
 @app.post("/trust_mode")
 def set_trust_mode(req: TrustModeRequest) -> JSONResponse:
     if req.mode not in TRUST_MODES:
@@ -343,6 +362,29 @@ def set_trust_mode(req: TrustModeRequest) -> JSONResponse:
         # Release any pending gate so the worker can observe the pause and exit.
         state.escalation.resolve(DecisionKind.BLOCK)
     return JSONResponse({"trust_mode": state.agent.trust_mode, "running": state.running})
+
+
+@app.get("/policy")
+def get_policy() -> JSONResponse:
+    return JSONResponse({"policy": state.owner_policy, "running": state.running})
+
+
+@app.post("/policy")
+def set_policy(req: PolicyRequest) -> JSONResponse:
+    if state.running:
+        return JSONResponse({"error": "policy cannot change while a run is active"}, status_code=409)
+    fields_set = req.model_fields_set if hasattr(req, "model_fields_set") else req.__fields_set__
+    updates = {key: getattr(req, key) for key in fields_set}
+    raw = {**state.owner_policy, **updates}
+    try:
+        policy = normalize_policy_config(raw)
+    except PolicyConfigError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=422)
+    with state.lock:
+        state.owner_policy = policy
+        trust_mode = state.agent.trust_mode
+        state.reset(trust_mode=trust_mode)
+    return JSONResponse({"policy": state.owner_policy, "trust_mode": state.agent.trust_mode})
 
 
 @app.post("/reset")

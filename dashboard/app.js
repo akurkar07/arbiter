@@ -48,6 +48,15 @@ const el = {
   pcRules: document.getElementById("pc-rules"),
   pcModel: document.getElementById("pc-model"),
   pcOwner: document.getElementById("pc-owner"),
+  policyStatus: document.getElementById("policy-status"),
+  policySpendCap: document.getElementById("policy-spend-cap"),
+  policyBudget: document.getElementById("policy-budget"),
+  policyNewVendor: document.getElementById("policy-new-vendor"),
+  policyEvidence: document.getElementById("policy-evidence"),
+  policyCategories: document.getElementById("policy-categories"),
+  policyPayees: document.getElementById("policy-payees"),
+  policySave: document.getElementById("policy-save"),
+  policySummary: document.getElementById("policy-summary"),
   stageRules: document.getElementById("stage-rules"),
   stageModel: document.getElementById("stage-model"),
   stageOwner: document.getElementById("stage-owner"),
@@ -94,6 +103,7 @@ let pollTimer = null;
 let pendingApproval = null;
 let currentState = { timeline: [] };
 let desiredTrustMode = "policy_autopilot";
+let desiredOwnerPolicy = null;
 let lastTableKey = "";
 let ownerTapResolver = null; // set while the demo waits for a human tap
 
@@ -370,6 +380,84 @@ function escapeHtml(s) {
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
+}
+
+function csvList(value) {
+  return String(value || "")
+    .split(",")
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
+function currentPolicyFromForm() {
+  return {
+    spend_cap: Number(el.policySpendCap && el.policySpendCap.value) || 0,
+    budget_remaining: Number(el.policyBudget && el.policyBudget.value) || 0,
+    allowed_categories: csvList(el.policyCategories && el.policyCategories.value),
+    approved_payees: csvList(el.policyPayees && el.policyPayees.value),
+    new_vendor_auto_threshold: Number(el.policyNewVendor && el.policyNewVendor.value) || 0,
+    detail_change_evidence_threshold: Number(el.policyEvidence && el.policyEvidence.value) || 0,
+    duplicate_lookback: 50,
+  };
+}
+
+function setPolicyStatus(text, kind = "idle") {
+  if (!el.policyStatus) return;
+  el.policyStatus.textContent = text;
+  el.policyStatus.className = `panel-meta policy-status-${kind}`;
+}
+
+function isPolicyFieldFocused() {
+  return [
+    el.policySpendCap,
+    el.policyBudget,
+    el.policyNewVendor,
+    el.policyEvidence,
+    el.policyCategories,
+    el.policyPayees,
+  ].includes(document.activeElement);
+}
+
+function renderPolicy(policy) {
+  if (!policy || !el.policySpendCap) return;
+  desiredOwnerPolicy = policy;
+  el.policySpendCap.value = policy.spend_cap ?? 1000;
+  el.policyBudget.value = policy.budget_remaining ?? policy.spend_cap ?? 1000;
+  el.policyNewVendor.value = policy.new_vendor_auto_threshold ?? 50;
+  el.policyEvidence.value = policy.detail_change_evidence_threshold ?? 0.8;
+  el.policyCategories.value = (policy.allowed_categories || []).join(", ");
+  el.policyPayees.value = (policy.approved_payees || []).join(", ");
+  if (el.policySummary) {
+    const categories = (policy.allowed_categories || []).length;
+    const payees = (policy.approved_payees || []).length;
+    el.policySummary.textContent = `Policy active: ${money(policy.spend_cap)} cap, ${categories} spend categories, ${payees} approved suppliers.`;
+  }
+}
+
+async function savePolicy() {
+  const policy = currentPolicyFromForm();
+  desiredOwnerPolicy = policy;
+  if (mode !== "live") {
+    renderPolicy(policy);
+    setPolicyStatus("Policy staged for next live run", "staged");
+    return true;
+  }
+  try {
+    const res = await fetch("/policy", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(policy),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || `policy save failed (${res.status})`);
+    renderPolicy(body.policy);
+    setPolicyStatus("Policy saved to backend", "saved");
+    pollLive();
+    return true;
+  } catch (err) {
+    setPolicyStatus(err.message || "Policy save failed", "error");
+    return false;
+  }
 }
 
 function verdictColor(decision) {
@@ -1207,6 +1295,7 @@ function render(state) {
     desiredTrustMode = state.trust_mode;
     el.trustMode.value = state.trust_mode;
   }
+  if (state && state.owner_policy && !isPolicyFieldFocused()) renderPolicy(state.owner_policy);
   renderMeters(state);
   renderSpark(state);
   renderVerdictBanner(state);
@@ -1294,7 +1383,15 @@ function startLive() {
   // plays the older AP-autopilot day, which has no margin-refusal climax.
   (async () => {
     try {
+      desiredOwnerPolicy = currentPolicyFromForm();
       await fetch("/reset", { method: "POST" });
+      if (desiredOwnerPolicy) {
+        await fetch("/policy", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(desiredOwnerPolicy),
+        });
+      }
       await fetch("/trust_mode", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1324,6 +1421,10 @@ el.toggleLive.addEventListener("click", () => {
   if (mode === "live") stopLive();
   else startLive();
 });
+
+if (el.policySave) {
+  el.policySave.addEventListener("click", savePolicy);
+}
 
 if (el.trustMode) {
   el.trustMode.addEventListener("change", async () => {
