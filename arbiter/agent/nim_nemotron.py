@@ -249,7 +249,7 @@ def selftest(model: Optional[str] = None) -> int:
 if __name__ == "__main__":  # pragma: no cover - module entry point
     # Lets `python -m arbiter.agent.nim_nemotron` prove the live path and
     # propagate the selftest exit code (0 ok / 1 no key / 2 rejected) so a
-    # deploy check or Atlas's key-drop verification can assert on it.
+    # deploy check can assert on it without parsing stdout.
     import sys
 
     sys.exit(selftest())

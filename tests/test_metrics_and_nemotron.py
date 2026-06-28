@@ -1,6 +1,6 @@
 """Tests for the measured governance metric and the bounded reasoning layer.
 
-These cover the two hackathon "real, not mocked" beats Helios closed:
+These cover the two hackathon "real, not mocked" beats the implementation needs:
 
 1. ``arbiter.metrics`` — the reinvest improvement is a number MEASURED by running
    the real 3-layer agent over the fraud scenario set, with the deterministic
