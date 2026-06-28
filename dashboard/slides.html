@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>How Arbiter Works</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath d='M24 3l16 6v11c0 11-7 19-16 24C15 39 8 31 8 20V9l16-6z' fill='%237a73ff'/%3E%3Cpath d='M16 25l5 5 11-12' fill='none' stroke='%23eef0ff' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0b0d12;
+      --surface: #121620;
+      --line: #232a36;
+      --line-2: #2f3848;
+      --text: #e9edf4;
+      --muted: #c4ccd8;
+      --faint: #9faabc;
+      --accent: #7c74ff;
+      --approve: #2fbf74;
+      --warn: #f0a92e;
+      --block: #f0566b;
+      --nvidia: #76b900;
+      --stripe: #635bff;
+      --nous: #ff7eb6;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Inter", "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+      overflow: hidden;
+    }
+    a { color: inherit; text-decoration: none; }
+    button { font: inherit; }
+
+    .orb { position: fixed; border-radius: 50%; filter: blur(90px); opacity: 0.34; pointer-events: none; z-index: 0; }
+    .orb-1 { width: 620px; height: 620px; top: -240px; left: -160px; background: radial-gradient(circle, rgba(124,116,255,0.5), transparent 70%); }
+    .orb-2 { width: 520px; height: 520px; bottom: -260px; right: -170px; background: radial-gradient(circle, rgba(118,185,0,0.26), transparent 70%); }
+    .grid-overlay {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0.42;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.026) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.026) 1px, transparent 1px);
+      background-size: 64px 64px;
+      -webkit-mask-image: radial-gradient(ellipse 80% 62% at 50% 45%, #000 26%, transparent 76%);
+      mask-image: radial-gradient(ellipse 80% 62% at 50% 45%, #000 26%, transparent 76%);
+    }
+
+    .deck {
+      position: relative;
+      z-index: 1;
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      padding: 22px clamp(18px, 4vw, 48px) 24px;
+    }
+    .deck-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      min-height: 44px;
+    }
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 11px;
+      min-width: 0;
+    }
+    .brand svg { flex: 0 0 auto; filter: drop-shadow(0 4px 14px rgba(124,116,255,0.45)); }
+    .brand strong { font-size: 18px; font-weight: 900; letter-spacing: -0.3px; }
+    .brand span { color: var(--muted); font-size: 13px; font-weight: 600; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 9px;
+      min-height: 42px;
+      padding: 11px 16px;
+      border-radius: 12px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 800;
+      transition: transform 0.14s ease, border-color 0.18s ease, background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+    }
+    .btn:hover { transform: translateY(-1px); }
+    .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 12px 34px -12px rgba(124,116,255,0.82); }
+    .btn-primary:hover { background: #8b83ff; }
+
+    .slides {
+      position: relative;
+      min-height: 0;
+      display: grid;
+      align-items: center;
+      padding: 22px 0;
+    }
+    .slide {
+      display: none;
+      width: min(1120px, 100%);
+      margin: 0 auto;
+      animation: rise 0.28s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+    }
+    .slide.active { display: block; }
+    @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+    .slide-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 0.92fr) minmax(320px, 1.08fr);
+      gap: clamp(22px, 4vw, 52px);
+      align-items: center;
+    }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 1.1px;
+      text-transform: uppercase;
+    }
+    .eyebrow::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: var(--approve);
+      box-shadow: 0 0 10px var(--approve);
+    }
+    h1, h2, p { margin: 0; }
+    h1, h2 {
+      font-size: clamp(38px, 6vw, 72px);
+      line-height: 1.01;
+      font-weight: 900;
+      letter-spacing: -1.8px;
+      max-width: 11ch;
+    }
+    .slide-copy > p {
+      margin-top: 20px;
+      color: var(--muted);
+      font-size: clamp(15px, 1.55vw, 18px);
+      line-height: 1.62;
+      max-width: 58ch;
+    }
+    .tag-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 24px;
+    }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      padding: 7px 11px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.035);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .tag.stripe { color: #b3adff; border-color: rgba(99,91,255,0.34); background: rgba(99,91,255,0.12); }
+    .tag.nvidia { color: #a7dc4d; border-color: rgba(118,185,0,0.34); background: rgba(118,185,0,0.11); }
+    .tag.nous { color: #ff9ec9; border-color: rgba(255,126,182,0.32); background: rgba(255,126,182,0.1); }
+
+    .visual {
+      min-height: 420px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.018));
+      box-shadow: 0 40px 120px -52px rgba(0,0,0,0.9);
+      overflow: hidden;
+      position: relative;
+    }
+    .visual::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(circle at 20% 20%, rgba(124,116,255,0.18), transparent 32%),
+        radial-gradient(circle at 80% 80%, rgba(47,191,116,0.1), transparent 34%);
+      pointer-events: none;
+    }
+    .terminal-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      height: 42px;
+      padding: 0 16px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255,255,255,0.02);
+      position: relative;
+      z-index: 1;
+    }
+    .terminal-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--line-2); }
+    .terminal-title { margin-left: 6px; color: var(--faint); font-family: "JetBrains Mono", monospace; font-size: 12px; }
+    .visual-body { position: relative; z-index: 1; padding: clamp(18px, 3vw, 30px); }
+
+    .flow-stack { display: grid; gap: 14px; }
+    .flow-card {
+      display: grid;
+      grid-template-columns: 42px 1fr auto;
+      align-items: center;
+      gap: 14px;
+      padding: 15px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: rgba(18,22,32,0.82);
+    }
+    .flow-icon {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      border-radius: 12px;
+      font-weight: 900;
+      font-family: "JetBrains Mono", monospace;
+    }
+    .flow-icon.stripe { color: #fff; background: var(--stripe); }
+    .flow-icon.nous { color: #fff; background: #db4f95; }
+    .flow-icon.rule { color: #8fb7ff; background: rgba(91,155,255,0.14); border: 1px solid rgba(91,155,255,0.26); }
+    .flow-icon.nvidia { color: #a7dc4d; background: rgba(118,185,0,0.14); border: 1px solid rgba(118,185,0,0.28); }
+    .flow-icon.owner { color: #ffd082; background: rgba(240,169,46,0.14); border: 1px solid rgba(240,169,46,0.28); }
+    .flow-card strong { display: block; font-size: 15px; }
+    .flow-card span { display: block; color: var(--muted); font-size: 12.5px; line-height: 1.45; margin-top: 3px; }
+    .flow-badge {
+      white-space: nowrap;
+      color: var(--faint);
+      font-family: "JetBrains Mono", monospace;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .money-path {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 18px;
+    }
+    .metric {
+      min-height: 118px;
+      padding: 16px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: rgba(18,22,32,0.78);
+    }
+    .metric small { display: block; color: var(--faint); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; }
+    .metric strong { display: block; margin-top: 12px; font-size: 28px; letter-spacing: -0.6px; }
+    .metric p { margin-top: 6px; color: var(--muted); font-size: 12px; line-height: 1.45; }
+
+    .policy-ladder { display: grid; gap: 12px; }
+    .policy-step {
+      display: grid;
+      grid-template-columns: 34px 1fr;
+      gap: 14px;
+      padding: 16px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: rgba(18,22,32,0.82);
+    }
+    .policy-step b {
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 11px;
+      background: rgba(124,116,255,0.14);
+      color: #aaa4ff;
+      font-family: "JetBrains Mono", monospace;
+    }
+    .policy-step strong { display: block; font-size: 15px; }
+    .policy-step p { margin-top: 5px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+
+    .receipt {
+      display: grid;
+      gap: 10px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 12px;
+    }
+    .receipt-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 14px;
+      padding: 12px 14px;
+      border-radius: 11px;
+      background: rgba(255,255,255,0.035);
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+    .receipt-row span:first-child { color: var(--muted); }
+    .receipt-row span:last-child { color: var(--text); font-weight: 700; }
+    .receipt-row.good span:last-child { color: var(--approve); }
+    .receipt-row.warn span:last-child { color: var(--warn); }
+    .receipt-row.block span:last-child { color: var(--block); }
+
+    .dashboard-preview {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .preview-panel {
+      min-height: 138px;
+      padding: 16px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: rgba(18,22,32,0.82);
+    }
+    .preview-panel.wide { grid-column: 1 / -1; }
+    .preview-panel small { display: block; color: var(--faint); font-size: 11px; font-weight: 800; letter-spacing: 0.8px; text-transform: uppercase; }
+    .preview-panel strong { display: block; margin-top: 12px; font-size: 24px; letter-spacing: -0.5px; }
+    .preview-panel p { margin-top: 8px; color: var(--muted); font-size: 13px; line-height: 1.45; }
+    .sparkline {
+      height: 44px;
+      margin-top: 16px;
+      border-radius: 10px;
+      background:
+        linear-gradient(135deg, transparent 20%, rgba(47,191,116,0.34) 20% 23%, transparent 23% 38%, rgba(47,191,116,0.5) 38% 42%, transparent 42% 62%, rgba(47,191,116,0.72) 62% 66%, transparent 66%),
+        rgba(255,255,255,0.03);
+    }
+
+    .deck-bottom {
+      min-height: 48px;
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: start;
+      gap: 16px;
+      transform: translateY(-16px);
+    }
+    .slide-meta {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 8px;
+    }
+    .slide-count {
+      color: var(--faint);
+      font-family: "JetBrains Mono", monospace;
+      font-size: 12px;
+    }
+    .back-arrow {
+      width: 36px;
+      height: 32px;
+      display: inline-grid;
+      place-items: center;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.02);
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 19px;
+      line-height: 1;
+      transition: transform 0.14s ease, border-color 0.18s ease, background 0.18s ease, color 0.18s ease, opacity 0.18s ease;
+    }
+    .back-arrow:hover { color: var(--text); border-color: var(--line-2); background: rgba(255,255,255,0.05); transform: translateX(-1px); }
+    .back-arrow.is-hidden { visibility: hidden; pointer-events: none; }
+    .dots {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 9px;
+    }
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      border: 0;
+      padding: 0;
+      cursor: pointer;
+      background: var(--line-2);
+      transition: transform 0.16s ease, background 0.16s ease, width 0.16s ease;
+    }
+    .dot.active {
+      width: 28px;
+      background: var(--accent);
+      box-shadow: 0 0 16px rgba(124,116,255,0.45);
+    }
+    .nav-slot { display: flex; justify-content: flex-end; transform: translateY(-10px); }
+
+    @media (max-width: 860px) {
+      body { overflow: auto; }
+      .deck { min-height: 100svh; padding-bottom: 18px; }
+      .slide-layout { grid-template-columns: 1fr; align-items: start; }
+      .visual { min-height: auto; }
+      h1, h2 { max-width: 12ch; }
+      .money-path { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 620px) {
+      .deck-top { align-items: flex-start; }
+      .brand span { display: none; }
+      .flow-card { grid-template-columns: 38px 1fr; }
+      .flow-badge { grid-column: 2; }
+      .dashboard-preview { grid-template-columns: 1fr; }
+      .preview-panel.wide { grid-column: auto; }
+      .deck-bottom { grid-template-columns: 1fr auto; }
+      .slide-meta { display: none; }
+      .dots { justify-content: flex-start; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .slide { animation: none; }
+      .btn, .dot { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="grid-overlay"></div>
+
+  <svg width="0" height="0" aria-hidden="true"><defs>
+    <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7a73ff" /><stop offset="1" stop-color="#4f46e5" />
+    </linearGradient>
+  </defs></svg>
+
+  <main class="deck" aria-label="How Arbiter works slide deck">
+    <header class="deck-top">
+      <a class="brand" href="index.html" aria-label="Arbiter home">
+        <svg viewBox="0 0 48 48" width="36" height="36" aria-hidden="true">
+          <path d="M24 3l16 6v11c0 11-7 19-16 24C15 39 8 31 8 20V9l16-6z" fill="url(#lg)"/>
+          <path d="M16 25l5 5 11-12" fill="none" stroke="#eef0ff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <strong>Arbiter</strong>
+        <span>How it works</span>
+      </a>
+    </header>
+
+    <section class="slides">
+      <article class="slide active" data-title="Purpose">
+        <div class="slide-layout">
+          <div class="slide-copy">
+            <span class="eyebrow">How it works</span>
+            <h1>The demo is an agent with a payment leash.</h1>
+            <p>Arbiter answers the Nous Research × NVIDIA × Stripe challenge by letting an autonomous service-business operator earn, buy, and deliver while preventing margin-killing spend.</p>
+            <div class="tag-row">
+              <span class="tag nous">Nous / Hermes agent</span>
+              <span class="tag nvidia">NVIDIA Nemotron</span>
+              <span class="tag stripe">Stripe test rail</span>
+            </div>
+          </div>
+          <div class="visual">
+            <div class="terminal-bar"><i class="terminal-dot"></i><i class="terminal-dot"></i><i class="terminal-dot"></i><span class="terminal-title">arbiter demo path</span></div>
+            <div class="visual-body">
+              <div class="flow-stack">
+                <div class="flow-card"><span class="flow-icon stripe">S</span><div><strong>Client pays the invoice</strong><span>Revenue lands first, tied to a job and reconciled to the run.</span></div><span class="flow-badge">money in</span></div>
+                <div class="flow-card"><span class="flow-icon nous">N</span><div><strong>Agent chooses what the job needs</strong><span>The operator can request tools, vendors, or add-ons to deliver the work.</span></div><span class="flow-badge">autonomy</span></div>
+                <div class="flow-card"><span class="flow-icon rule">G</span><div><strong>Governance decides before settlement</strong><span>Every spend passes through one controlled payment door.</span></div><span class="flow-badge">no bypass</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="slide" data-title="Stripe">
+        <div class="slide-layout">
+          <div class="slide-copy">
+            <span class="eyebrow">Money rail</span>
+            <h2>Stripe shows whether the rail executed, or did not.</h2>
+            <p>Client payments and approved supplier payments are represented on the same rail. In live test mode Arbiter records Stripe receipts; without keys, faithful stubs keep the governance story runnable and honest.</p>
+            <div class="tag-row">
+              <span class="tag stripe">PaymentIntents</span>
+              <span class="tag stripe">Connect transfers</span>
+              <span class="tag">Reconciliation</span>
+            </div>
+          </div>
+          <div class="visual">
+            <div class="terminal-bar"><i class="terminal-dot"></i><i class="terminal-dot"></i><i class="terminal-dot"></i><span class="terminal-title">rail truth</span></div>
+            <div class="visual-body">
+              <div class="money-path">
+                <div class="metric"><small>Seed</small><strong>£50</strong><p>The business starts tiny, so every bad spend matters.</p></div>
+                <div class="metric"><small>Revenue in</small><strong>£480</strong><p>Client jobs create the budget envelope for delivery spend.</p></div>
+                <div class="metric"><small>Spend out</small><strong>£105</strong><p>Only approved decisions can create a supplier settlement.</p></div>
+              </div>
+              <div class="receipt" style="margin-top:18px">
+                <div class="receipt-row good"><span>client_payment</span><span>test pi_... verified</span></div>
+                <div class="receipt-row good"><span>supplier_payment</span><span>test tr_... settled</span></div>
+                <div class="receipt-row block"><span>margin_killer</span><span>no rail call</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="slide" data-title="Agent">
+        <div class="slide-layout">
+          <div class="slide-copy">
+            <span class="eyebrow">Autonomous operator</span>
+            <h2>The agent can act, but it cannot hold the payment key.</h2>
+            <p>The Hermes/Nous-facing integration exposes Arbiter as an MCP server. The agent asks for governed settlement; Arbiter owns the decision engine, the payment rail, and the ledger.</p>
+            <div class="tag-row">
+              <span class="tag nous">MCP tool</span>
+              <span class="tag">Single settle() door</span>
+              <span class="tag">Fails closed</span>
+            </div>
+          </div>
+          <div class="visual">
+            <div class="terminal-bar"><i class="terminal-dot"></i><i class="terminal-dot"></i><i class="terminal-dot"></i><span class="terminal-title">agent handoff</span></div>
+            <div class="visual-body">
+              <div class="flow-stack">
+                <div class="flow-card"><span class="flow-icon nous">1</span><div><strong>Agent request</strong><span>"Buy the add-on needed to finish this client job."</span></div><span class="flow-badge">authorize_payment</span></div>
+                <div class="flow-card"><span class="flow-icon rule">2</span><div><strong>Arbiter gate</strong><span>The request is converted into a structured money decision.</span></div><span class="flow-badge">policy context</span></div>
+                <div class="flow-card"><span class="flow-icon stripe">3</span><div><strong>Execution only after approve</strong><span>A block or escalation moves nothing on Stripe.</span></div><span class="flow-badge">settlement</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="slide" data-title="Policy">
+        <div class="slide-layout">
+          <div class="slide-copy">
+            <span class="eyebrow">Decision engine</span>
+            <h2>Money is never decided by a raw LLM.</h2>
+            <p>The first hard verdict wins. Deterministic rules catch obvious failures, Nemotron handles bounded judgment inside the limits, and the owner resolves ambiguous cases by phone.</p>
+            <div class="tag-row">
+              <span class="tag">Margin rules</span>
+              <span class="tag nvidia">Bounded JSON judgment</span>
+              <span class="tag">Owner tap</span>
+            </div>
+          </div>
+          <div class="visual">
+            <div class="terminal-bar"><i class="terminal-dot"></i><i class="terminal-dot"></i><i class="terminal-dot"></i><span class="terminal-title">three-layer governance</span></div>
+            <div class="visual-body">
+              <div class="policy-ladder">
+                <div class="policy-step"><b>1</b><div><strong>Deterministic rules</strong><p>Duplicate invoices, unapproved payees, instruction overrides, over-budget self-spend, and margin-killing purchases are refused without model discretion.</p></div></div>
+                <div class="policy-step"><b>2</b><div><strong>NVIDIA Nemotron</strong><p>Nuanced delivery-spend judgments are strict, bounded, and advisory unless the rules route the request onward.</p></div></div>
+                <div class="policy-step"><b>3</b><div><strong>Owner approval</strong><p>Thin-margin or weak-evidence cases park the agent until a real human says yes or no.</p></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="slide" data-title="Dashboard">
+        <div class="slide-layout">
+          <div class="slide-copy">
+            <span class="eyebrow">Judge view</span>
+            <h2>The dashboard shows the whole run as evidence.</h2>
+            <p>The live screen is not a separate story layer. It renders the shared state contract: revenue, cost, margin kept, per-job ledger, owner approval state, Stripe receipts, and the append-only audit trail.</p>
+            <div class="tag-row">
+              <span class="tag">Live event feed</span>
+              <span class="tag">Per-job ledger</span>
+              <span class="tag">Audit evidence</span>
+            </div>
+          </div>
+          <div class="visual">
+            <div class="terminal-bar"><i class="terminal-dot"></i><i class="terminal-dot"></i><i class="terminal-dot"></i><span class="terminal-title">dashboard surfaces</span></div>
+            <div class="visual-body">
+              <div class="dashboard-preview">
+                <div class="preview-panel"><small>Balance</small><strong>£50 → £425</strong><p>Seed, revenue, spend, and net profit update as the operator runs.</p></div>
+                <div class="preview-panel"><small>Policy pipeline</small><strong>Rules → Nemotron → owner</strong><p>Every row shows who decided and why.</p></div>
+                <div class="preview-panel wide"><small>Signature beat</small><strong>Refused: would kill margin</strong><p>The demo climax is economic refusal, not just fraud blocking.</p><div class="sparkline" aria-hidden="true"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="slide" data-title="Run">
+        <div class="slide-layout">
+          <div class="slide-copy">
+            <span class="eyebrow">Ready to demo</span>
+            <h2>Now watch the business run.</h2>
+            <p>Open the dashboard and follow the path from client revenue through governed delivery spend to the moment Arbiter refuses a purchase because it would make the job unprofitable.</p>
+            <div class="tag-row">
+              <span class="tag stripe">Money in</span>
+              <span class="tag nvidia">Judgment shown</span>
+              <span class="tag">Margin protected</span>
+            </div>
+          </div>
+          <div class="visual">
+            <div class="terminal-bar"><i class="terminal-dot"></i><i class="terminal-dot"></i><i class="terminal-dot"></i><span class="terminal-title">final checklist</span></div>
+            <div class="visual-body">
+              <div class="receipt">
+                <div class="receipt-row good"><span>1. Open dashboard</span><span>ready</span></div>
+                <div class="receipt-row good"><span>2. Run demo</span><span>operator timeline</span></div>
+                <div class="receipt-row warn"><span>3. Owner tap</span><span>human gate</span></div>
+                <div class="receipt-row block"><span>4. Margin killer</span><span>refused</span></div>
+                <div class="receipt-row good"><span>5. Audit trail</span><span>reconciled</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <footer class="deck-bottom">
+      <div class="slide-meta">
+        <span class="slide-count" id="slide-count">01 / 06</span>
+        <button class="back-arrow" id="prev-button" type="button" aria-label="Previous slide">&larr;</button>
+      </div>
+      <nav class="dots" id="dots" aria-label="Slides"></nav>
+      <div class="nav-slot">
+        <button class="btn btn-primary" id="next-button" type="button">Next</button>
+      </div>
+    </footer>
+  </main>
+
+  <script>
+    const slides = Array.from(document.querySelectorAll(".slide"));
+    const dots = document.getElementById("dots");
+    const count = document.getElementById("slide-count");
+    const prev = document.getElementById("prev-button");
+    const next = document.getElementById("next-button");
+    let index = 0;
+
+    slides.forEach((slide, i) => {
+      const dot = document.createElement("button");
+      dot.className = "dot";
+      dot.type = "button";
+      dot.setAttribute("aria-label", `Go to slide ${i + 1}: ${slide.dataset.title}`);
+      dot.addEventListener("click", () => showSlide(i));
+      dots.appendChild(dot);
+    });
+
+    function pad(n) {
+      return String(n).padStart(2, "0");
+    }
+
+    function showSlide(nextIndex) {
+      index = Math.max(0, Math.min(slides.length - 1, nextIndex));
+      slides.forEach((slide, i) => slide.classList.toggle("active", i === index));
+      Array.from(dots.children).forEach((dot, i) => {
+        dot.classList.toggle("active", i === index);
+        dot.setAttribute("aria-current", i === index ? "step" : "false");
+      });
+      count.textContent = `${pad(index + 1)} / ${pad(slides.length)}`;
+      const isFinal = index === slides.length - 1;
+      next.textContent = isFinal ? "Dashboard" : "Next";
+      next.setAttribute("aria-label", isFinal ? "Open dashboard" : "Next slide");
+      prev.classList.toggle("is-hidden", index === 0);
+    }
+
+    next.addEventListener("click", () => {
+      if (index === slides.length - 1) {
+        window.location.href = "dashboard.html";
+        return;
+      }
+      showSlide(index + 1);
+    });
+
+    prev.addEventListener("click", () => {
+      showSlide(index - 1);
+    });
+
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowRight" || event.key === " ") {
+        event.preventDefault();
+        if (index === slides.length - 1) {
+          window.location.href = "dashboard.html";
+        } else {
+          showSlide(index + 1);
+        }
+      }
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        showSlide(index - 1);
+      }
+    });
+
+    showSlide(0);
+  </script>
+</body>
+</html>
