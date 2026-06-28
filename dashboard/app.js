@@ -64,6 +64,7 @@ const el = {
   redteamStatus: document.getElementById("redteam-status"),
   redteamRun: document.getElementById("redteam-run"),
   redteamResults: document.getElementById("redteam-results"),
+  auditEvidence: document.getElementById("audit-evidence"),
   stageRules: document.getElementById("stage-rules"),
   stageModel: document.getElementById("stage-model"),
   stageOwner: document.getElementById("stage-owner"),
@@ -572,6 +573,42 @@ function renderRedteam(body) {
         <small>${escapeHtml((row.policy_refs || []).join(", "))}</small>
       </div>
     </div>`).join("");
+}
+
+function shortHash(hash) {
+  if (!hash) return "pending";
+  return `${String(hash).slice(0, 10)}…${String(hash).slice(-8)}`;
+}
+
+function renderAuditEvidence(state) {
+  if (!el.auditEvidence) return;
+  const audit = state.audit_evidence || {};
+  const rec = state.reconciliation || null;
+  const settlements = Array.isArray(state.settlements) ? state.settlements : [];
+  const events = Number(audit.event_count) || 0;
+  const ledgerHash = audit.ledger_hash || null;
+  const recOk = rec ? rec.ok === true : true;
+  el.auditEvidence.innerHTML = `
+    <div class="audit-card">
+      <span class="audit-k">Decision entries</span>
+      <b>${events}</b>
+      <small>${audit.append_only ? "append-only ledger" : "ledger status unknown"}</small>
+    </div>
+    <div class="audit-card">
+      <span class="audit-k">Ledger hash</span>
+      <b class="mono">${escapeHtml(shortHash(ledgerHash))}</b>
+      <small>${escapeHtml(audit.hash_algorithm || "sha256-prev-hash")}</small>
+    </div>
+    <div class="audit-card">
+      <span class="audit-k">Rail reconciliation</span>
+      <b class="${recOk ? "audit-ok" : "audit-bad"}">${recOk ? "Matched" : "Drift"}</b>
+      <small>${settlements.length} settlement receipt${settlements.length === 1 ? "" : "s"}</small>
+    </div>
+    <div class="audit-card">
+      <span class="audit-k">Money door</span>
+      <b class="mono">${escapeHtml(audit.single_money_door || "ArbiterAgent.settle()")}</b>
+      <small>frontend displays proof, backend owns execution</small>
+    </div>`;
 }
 
 async function runRedteam() {
@@ -1441,6 +1478,7 @@ function render(state) {
   renderCounters(state.timeline || [], state);
   renderReconciliation(state);
   renderProcurement(state);
+  renderAuditEvidence(state);
   renderApproval(state);
   renderTable(state.timeline || []);
   const tl = state.timeline || [];
@@ -1460,6 +1498,7 @@ function showIdle() {
   renderCounters([]);
   renderReconciliation({});
   renderProcurement({});
+  renderAuditEvidence({ audit_evidence: { event_count: 0, append_only: true } });
   renderApproval({ awaiting_approval: null });
   lastTableKey = "__idle__";
   renderTable([]);

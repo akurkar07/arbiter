@@ -11,6 +11,8 @@ slotted in later without changing the interface.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import time
 from dataclasses import dataclass, field
 from typing import Optional
@@ -146,3 +148,49 @@ class EventLedger:
             }
             for e in self.entries
         ]
+
+    def evidence_chain(self) -> list[dict]:
+        """Tamper-evident hash chain over the append-only decision entries."""
+        rows: list[dict] = []
+        prev_hash = "0" * 64
+        for index, entry in enumerate(self.entries):
+            payload = {
+                "index": index,
+                "timestamp": entry.timestamp,
+                "event_id": entry.event_id,
+                "event_kind": entry.event_kind,
+                "decision": entry.decision,
+                "reason": entry.reason,
+                "policy_refs": entry.policy_refs,
+                "risk_score": entry.risk_score,
+                "decided_by": entry.decided_by,
+                "amount": entry.amount,
+                "currency": entry.currency,
+                "category": entry.category,
+                "demo_beat": entry.demo_beat,
+                "job": entry.job,
+                "margin_killer": entry.margin_killer,
+            }
+            digest = hashlib.sha256(
+                json.dumps({"prev_hash": prev_hash, "entry": payload}, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            ).hexdigest()
+            rows.append({
+                "index": index,
+                "event_id": entry.event_id,
+                "decision": entry.decision,
+                "prev_hash": prev_hash,
+                "hash": digest,
+            })
+            prev_hash = digest
+        return rows
+
+    def audit_summary(self) -> dict:
+        """Compact proof packet for the dashboard audit panel."""
+        chain = self.evidence_chain()
+        return {
+            "event_count": len(chain),
+            "hash_algorithm": "sha256-prev-hash",
+            "ledger_hash": chain[-1]["hash"] if chain else None,
+            "append_only": True,
+            "chain": chain,
+        }
