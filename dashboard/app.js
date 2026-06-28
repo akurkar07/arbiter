@@ -200,7 +200,7 @@ function isHero(row) {
 // EVERY delivery spend, but the *deciding* layer is the rules engine — so the
 // pipeline counter must read the judgements off the business rollup, never the
 // timeline layer (which only ever shows the deciding rule). Matches the engine
-// handoff: rules DECIDE, Nemotron JUDGES every spend; show both honestly.
+// contract: rules DECIDE, Nemotron JUDGES every spend; show both honestly.
 function nemotronJudgements(state) {
   return (state && state.business && state.business.jobs ? state.business.jobs : [])
     .flatMap((j) => j.spends || [])
