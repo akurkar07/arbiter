@@ -299,6 +299,11 @@ class DemoState:
                 for c in self.stripe.calls
                 if c.op in ("pay_supplier", "provision_capability") and c.event_id
             ],
+            "audit_evidence": {
+                **self.ledger.audit_summary(),
+                "single_money_door": "ArbiterAgent.settle()",
+                "policy_source": "backend PolicyContext",
+            },
             # insertion order matches dashboard/sample_state.json; the UI reverses
             # for display so the contract fixture and the live feed are identical.
             "timeline": self.ledger.as_timeline(),
