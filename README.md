@@ -8,8 +8,7 @@ job unprofitable. Every money action passes through deterministic policy, bounde
 NVIDIA Nemotron reasoning, and phone escalation to the owner. The agent never holds
 the money rail directly — a single `settle()` door is the only path to a payment.
 
-Built for the Nous Research × NVIDIA × Stripe agent hackathon (deadline EOD June
-30, 2026).
+Built by **Ben Anokye-Davies** and **Alex Kurkar** for the Nous Research × NVIDIA × Stripe agent hackathon.
 
 ## The one thing to remember
 
@@ -107,7 +106,10 @@ docs/                    # architecture diagrams and public specs
 
 ## Team
 
-Built by Ben Anokye-Davies with frontend collaboration from Alex Kurkar.
+**Ben Anokye-Davies** and **Alex Kurkar** built Arbiter together.
+
+- **Ben Anokye-Davies** — backend policy engine, agent core, ledger, operator loop, governed payment flow, tests, demo narrative, and submission.
+- **Alex Kurkar** — dashboard/front-end experience, phone approval surface, visual demo flow, and product presentation polish.
 
 ## No real money
 
