@@ -64,7 +64,7 @@ truthfully claim real sponsor tech.
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest                        # 129 passing
+pytest                        # full test suite
 python -m arbiter.cli         # plays the operator timeline in the terminal
 ```
 
@@ -100,17 +100,14 @@ arbiter/
   mcp_server.py          # Hermes MCP server exposing the governed door
   cli.py                 # demo runner
 scenarios/               # 10 JSON fixtures (the AP demo storyboard)
-dashboard/               # dashboard + phone approval UI (Alex's lane)
-tests/                   # 129 passing — policy, operator, ingest, web, single-door
-docs/                    # expansion plan, architecture diagram, handoffs
+dashboard/               # dashboard + phone approval UI
+tests/                   # policy, operator, ingest, web, single-door
+docs/                    # architecture diagrams and public specs
 ```
 
-## Team lanes
+## Team
 
-- **Ben** — policy engine, agent core, ledger, operator loop, reinvest, tests, demo
-  runner; orchestration, narrative, submission, repo admin.
-- **Alex** — Stripe webhook/Connect layer, dashboard, phone approval UI, scenario
-  generation.
+Built by Ben Anokye-Davies with frontend collaboration from Alex Kurkar.
 
 ## No real money
 
